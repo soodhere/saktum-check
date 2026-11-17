@@ -1,0 +1,38 @@
+{
+  "envelopeFormat": "0.1",
+  "id": "env_01",
+  "protocol": "mcp",
+  "operation": "tools/call",
+  "tool": "issue_refund",
+  "caller": {
+    "agent": "did:web:id.saktum.dev:agents:northwind:support-ops"
+  },
+  "target": {
+    "service": "refundpro",
+    "version": "2.3.2"
+  },
+  "argumentsHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "timestamp": "2026-10-12T10:00:00Z",
+  "context": {
+    "task": {
+      "id": "task_7712",
+      "purpose": "refund a damaged order",
+      "permissions": [
+        "money.refund"
+      ]
+    },
+    "process": {
+      "id": "proc_refunds",
+      "name": "Customer refund",
+      "step": "3-issue-refund"
+    },
+    "orchestrator": "camunda",
+    "rationale": "Refund for damaged item in order 7712, within the customer refund policy.",
+    "executor": {
+      "type": "orchestrator",
+      "id": "did:web:orchestrator.northwind.example",
+      "name": "Camunda (refund process)",
+      "instance": "worker-7"
+    }
+  }
+}

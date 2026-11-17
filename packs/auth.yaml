@@ -1,0 +1,60 @@
+packFormat: "0.1"
+id: auth
+version: 0.1.0
+category: auth
+description: Sign-in for remote servers, checked from the outside without credentials. Follows the MCP authorization specification and the OAuth RFCs it builds on.
+checks:
+  - id: auth.https
+    title: Served over HTTPS
+    severity: critical
+    safety: passive
+    appliesTo: { transports: [streamable-http] }
+    steps: [{ action: analyse, analyser: auth-https }]
+    fix: Serve the MCP endpoint over HTTPS (plain HTTP only on localhost during development).
+    references: ["OWASP MCP Top 10: MCP07 Insufficient Authentication and Authorization", "CWE-319"]
+    normative: [{ source: "MCP specification", version: "verify-latest", clause: "Authorization: communication security", level: MUST }, { source: "RFC 9700", clause: "OAuth security best current practice: TLS", level: MUST }]
+  - id: auth.unauthenticated
+    title: Whether sign-in is required
+    severity: info
+    safety: passive
+    scored: false
+    appliesTo: { transports: [streamable-http] }
+    steps: [{ action: analyse, analyser: auth-unauthenticated }]
+    fix: Require OAuth sign-in for any server that exposes user data or actions.
+    references: ["OWASP MCP Top 10: MCP07 Insufficient Authentication and Authorization"]
+  - id: auth.www-authenticate
+    title: Refusals point clients to the resource metadata
+    severity: high
+    safety: passive
+    appliesTo: { transports: [streamable-http] }
+    steps: [{ action: analyse, analyser: auth-www-authenticate }]
+    fix: Answer unauthenticated requests with 401 and a header such as WWW-Authenticate Bearer resource_metadata="https://your-server/.well-known/oauth-protected-resource".
+    references: ["OWASP MCP Top 10: MCP07 Insufficient Authentication and Authorization"]
+    normative: [{ source: "RFC 9728", clause: "Section 5.1, WWW-Authenticate response", level: MUST }, { source: "MCP specification", version: "verify-latest", clause: "Authorization: authorization server discovery", level: MUST }]
+  - id: auth.resource-metadata
+    title: Protected resource metadata is published and correct
+    severity: high
+    safety: passive
+    appliesTo: { transports: [streamable-http] }
+    steps: [{ action: analyse, analyser: auth-resource-metadata }]
+    fix: Publish /.well-known/oauth-protected-resource with "resource" set to this server's URL and "authorization_servers" listing your HTTPS authorization server.
+    references: ["OWASP MCP Top 10: MCP07 Insufficient Authentication and Authorization"]
+    normative: [{ source: "RFC 9728", clause: "Sections 2 and 3, metadata and well-known URI", level: MUST }]
+  - id: auth.server-metadata
+    title: Authorization server metadata is complete, with PKCE
+    severity: high
+    safety: passive
+    appliesTo: { transports: [streamable-http] }
+    steps: [{ action: analyse, analyser: auth-server-metadata }]
+    fix: Publish RFC 8414 metadata with issuer, HTTPS authorization and token endpoints, the code response type, and code_challenge_methods_supported including S256.
+    references: ["OWASP MCP Top 10: MCP07 Insufficient Authentication and Authorization"]
+    normative: [{ source: "RFC 8414", clause: "Sections 2 and 3", level: MUST }, { source: "RFC 7636", clause: "PKCE with S256", level: MUST }, { source: "MCP specification", version: "verify-latest", clause: "Authorization: PKCE required", level: MUST }]
+  - id: auth.invalid-token
+    title: Invalid tokens are rejected
+    severity: critical
+    safety: passive
+    appliesTo: { transports: [streamable-http] }
+    steps: [{ action: analyse, analyser: auth-invalid-token }]
+    fix: Validate every bearer token (signature or introspection, expiry, audience) and answer invalid ones with 401 and error="invalid_token".
+    references: ["OWASP MCP Top 10: MCP01 Token Mismanagement and Secret Exposure", "OWASP MCP Top 10: MCP07 Insufficient Authentication and Authorization", "CWE-287"]
+    normative: [{ source: "RFC 6750", clause: "Section 3.1, invalid_token", level: MUST }]

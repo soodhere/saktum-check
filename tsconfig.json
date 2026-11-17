@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/sign" },
+    { "path": "packages/transports" },
+    { "path": "packages/testkit-core" },
+    { "path": "packages/report" },
+    { "path": "packages/cli" }
+  ]
+}

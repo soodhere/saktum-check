@@ -1,0 +1,36 @@
+packFormat: "0.1"
+id: performance
+version: 0.1.0
+category: performance
+description: Speed and resource use, reported as information and never part of the trust score. The burst test runs only with --active.
+checks:
+  - id: perf.startup
+    title: Start-up and handshake time
+    severity: info
+    safety: passive
+    scored: false
+    steps: [{ action: analyse, analyser: perf-startup }]
+    fix: Defer heavy initialisation until the first call that needs it; agents and clients time out on slow starts.
+  - id: perf.latency
+    title: Tool-list latency and size
+    severity: info
+    safety: passive
+    scored: false
+    steps: [{ action: analyse, analyser: perf-latency }]
+    fix: Keep tools/list fast and small; cache it and trim long descriptions.
+  - id: perf.memory
+    title: Memory and CPU of a local server
+    severity: info
+    safety: passive
+    scored: false
+    appliesTo: { transports: [stdio] }
+    steps: [{ action: analyse, analyser: perf-memory }]
+    fix: Reduce idle memory and CPU; local servers run beside the user's other tools.
+  - id: perf.burst
+    title: Behaviour under a short burst (rate limiting)
+    severity: info
+    safety: active
+    scored: false
+    steps: [{ action: analyse, analyser: perf-burst }]
+    fix: Answer overload with HTTP 429 and Retry-After instead of errors, and set limits per client.
+    references: ["OWASP MCP Top 10: MCP02 Privilege Escalation via Scope Creep (resource abuse)", "CWE-770"]

@@ -1,0 +1,3 @@
+# 0006 Untrusted input and tolerant reading
+**Decision:** all server data is untrusted. Terminal output is stripped of escape sequences and control characters, invisible characters are revealed, HTML is escaped under a strict content-security policy, and responses are size- and depth-limited. Responses are read **tolerantly** (raw tools/list and tools/call), because the official SDK client's strict validation throws on exactly the malformed data Trust Check exists to report. A malformed initialize becomes a failed handshake finding; a server that never answers is exit code 2.
+**Found during the infrastructure build:** against a broken fixture, the SDK's listTools threw before any check could run.

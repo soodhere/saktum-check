@@ -1,0 +1,43 @@
+# Validation corpus: every pack change runs against these, and false positives are tracked per check.
+# Versions as field-tested in October 2026. "archived" servers are still widely installed.
+servers:
+  - { name: everything, npm: "@modelcontextprotocol/server-everything", kind: reference }
+  - { name: filesystem, npm: "@modelcontextprotocol/server-filesystem", kind: reference, args: ["<scratch-dir>"] }
+  - { name: memory, npm: "@modelcontextprotocol/server-memory", kind: reference }
+  - { name: sequential-thinking, npm: "@modelcontextprotocol/server-sequential-thinking", kind: reference }
+  - { name: playwright, npm: "@playwright/mcp", version: "0.0.83", args: ["--headless"] }
+  - { name: context7, npm: "@upstash/context7-mcp", version: "4.4.2" }
+  - { name: notion, npm: "@notionhq/notion-mcp-server", version: "2.5.2", env: [OPENAPI_MCP_HEADERS] }
+  - { name: desktop-commander, npm: "@wonderwhy-er/desktop-commander", version: "0.3.0" }
+  - { name: kubernetes, npm: "mcp-server-kubernetes", version: "4.1.9" }
+  - { name: supabase, npm: "@supabase/mcp-server-supabase", needs: network-at-start }
+  - { name: firecrawl, npm: "firecrawl-mcp", version: "3.30.1", env: [FIRECRAWL_API_KEY] }
+  - { name: tavily, npm: "tavily-mcp", version: "0.2.22", env: [TAVILY_API_KEY] }
+  - { name: exa, npm: "exa-mcp-server", version: "3.4.2", env: [EXA_API_KEY] }
+  - { name: github-archived, npm: "@modelcontextprotocol/server-github", version: "2025.4.8", archived: true, env: [GITHUB_PERSONAL_ACCESS_TOKEN] }
+  - { name: brave-archived, npm: "@modelcontextprotocol/server-brave-search", version: "0.6.2", archived: true, env: [BRAVE_API_KEY] }
+  - { name: slack-archived, npm: "@modelcontextprotocol/server-slack", version: "2025.4.25", archived: true, env: [SLACK_BOT_TOKEN, SLACK_TEAM_ID] }
+  - { name: postgres-archived, npm: "@modelcontextprotocol/server-postgres", version: "0.6.2", archived: true, args: ["postgresql://localhost/db"] }
+  - { name: browserbase, npm: "@browserbasehq/mcp-server-browserbase", version: "2.4.3", env: [BROWSERBASE_API_KEY, BROWSERBASE_PROJECT_ID] }
+  - { name: heroku, npm: "@heroku/mcp-server", version: "1.2.12", env: [HEROKU_API_KEY] }
+  - { name: stripe, npm: "@stripe/mcp", needs: network-at-start, args: ["--tools=all", "--api-key=<test-key>"] }
+  - { name: hubspot, npm: "@hubspot/mcp-server", version: "0.4.0", env: [PRIVATE_APP_ACCESS_TOKEN] }
+# To add in the first sprint: 3-5 public remote servers with OAuth (cannot be reached from the build sandbox).
+  # Added 16 Nov 2026 for the v0.1 validation (see docs/VALIDATION.md)
+  - { name: playwright-latest, npm: "@playwright/mcp", version: "0.0.83", args: ["--headless"] }
+  - { name: sentry, npm: "@sentry/mcp-server", env: [SENTRY_ACCESS_TOKEN] }
+  - { name: mongodb, npm: "mongodb-mcp-server" }
+  - { name: neon, npm: "@neondatabase/mcp-server-neon", args: ["start", "<key>"], needs: network-at-start }
+  - { name: elasticsearch, npm: "@elastic/mcp-server-elasticsearch", env: [ES_URL, ES_API_KEY] }
+  - { name: figma, npm: "figma-developer-mcp", args: ["--stdio"], env: [FIGMA_API_KEY] }
+  - { name: puppeteer-archived, npm: "@modelcontextprotocol/server-puppeteer", archived: true, needs: browser-download }
+  - { name: gdrive-archived, npm: "@modelcontextprotocol/server-gdrive", archived: true, needs: credentials-file }
+  - { name: everart-archived, npm: "@modelcontextprotocol/server-everart", archived: true, env: [EVERART_API_KEY] }
+  - { name: gitlab-archived, npm: "@modelcontextprotocol/server-gitlab", archived: true, env: [GITLAB_PERSONAL_ACCESS_TOKEN] }
+  - { name: redis-archived, npm: "@modelcontextprotocol/server-redis", archived: true, args: ["redis://localhost:6379"], needs: running-service }
+  - { name: aws-kb-archived, npm: "@modelcontextprotocol/server-aws-kb-retrieval", archived: true, env: [AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION] }
+  - { name: py-fetch, pypi: "mcp-server-fetch", runner: uvx }
+  - { name: py-git, pypi: "mcp-server-git", runner: uvx, args: ["--repository", "<scratch-repo>"] }
+  - { name: py-time, pypi: "mcp-server-time", runner: uvx }
+  - { name: py-sqlite, pypi: "mcp-server-sqlite", runner: uvx, args: ["--db-path", "<scratch>.db"], note: "crashes on start in the tested version" }
+  - { name: py-awsdocs, pypi: "awslabs.aws-documentation-mcp-server", runner: uvx }

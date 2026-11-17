@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/schemas/test-cases/0.1.json",
+  "title": "Saktum Trust Check functional test cases (saktum.tests.yaml)",
+  "type": "object",
+  "required": ["testsFormat", "tests"],
+  "additionalProperties": false,
+  "properties": {
+    "testsFormat": { "const": "0.1" },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "tool", "input", "expect"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "tool": { "type": "string" },
+          "input": { "type": "object" },
+          "sideEffects": { "type": "boolean", "default": false, "description": "Tests with side effects run only against owned targets." },
+          "expect": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "isError": { "type": "boolean" },
+              "textContains": { "type": "string" },
+              "structured": { "type": "object" },
+              "outputSchema": { "type": "boolean" },
+              "latencyMs": { "type": "object", "properties": { "lt": { "type": "integer" } }, "additionalProperties": false }
+            }
+          }
+        }
+      }
+    }
+  }
+}

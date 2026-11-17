@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/schemas/result/0.1.json",
+  "title": "Saktum Trust Check result",
+  "description": "The canonical result of one run. Every report format is rendered from this model. Evidence is a hash plus a short, sanitised excerpt; raw payloads never appear.",
+  "type": "object",
+  "required": [
+    "resultFormat",
+    "tool",
+    "target",
+    "packs",
+    "findings",
+    "scores",
+    "metrics",
+    "run"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "resultFormat": {
+      "const": "0.1"
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "saktum-trust-check"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "transport",
+        "description"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "enum": [
+            "stdio",
+            "streamable-http"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "protocolVersion": {
+          "type": "string"
+        },
+        "serverInfo": {
+          "type": "object"
+        },
+        "toolsFingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "toolCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "hash"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "scores": {
+      "type": "object",
+      "required": [
+        "overall",
+        "capped",
+        "categories"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "overall": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "capped": {
+          "type": "boolean"
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contextCostTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "largestTools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "tool",
+              "tokens"
+            ],
+            "properties": {
+              "tool": {
+                "type": "string"
+              },
+              "tokens": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "contextCostPer1kTurnsUsd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated cost of loading the tool definitions on 1,000 agent turns at pricePerMTokUsd. Reported only."
+        },
+        "pricePerMTokUsd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "performance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "initMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "listMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "listBytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rssMb": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cpuPct": {
+              "type": "number",
+              "minimum": 0
+            },
+            "burst": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "requests": {
+                  "type": "integer"
+                },
+                "ok": {
+                  "type": "integer"
+                },
+                "rateLimited": {
+                  "type": "integer"
+                },
+                "errors": {
+                  "type": "integer"
+                },
+                "p95Ms": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "startedAt",
+        "durationMs",
+        "mode",
+        "runner",
+        "sandbox"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mode": {
+          "enum": [
+            "passive",
+            "active"
+          ]
+        },
+        "runner": {
+          "enum": [
+            "self",
+            "hosted"
+          ],
+          "description": "self: run and signed by the user, proves integrity not independence. hosted: run and signed by Saktum (later)."
+        },
+        "sandbox": {
+          "enum": [
+            "none",
+            "docker"
+          ],
+          "description": "Whether local servers ran inside a container sandbox."
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "required": [
+        "alg",
+        "kid",
+        "jws"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "alg": {
+          "const": "EdDSA"
+        },
+        "kid": {
+          "type": "string",
+          "pattern": "^did:key:z"
+        },
+        "jws": {
+          "type": "string"
+        }
+      }
+    },
+    "grade": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "F",
+        null
+      ],
+      "description": "Letter grade from the trust score: A 90-100, B 80-89, C 70-79, D 50-69, F below 50 or any failed critical check."
+    },
+    "summary": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "maxLength": 400
+      },
+      "description": "Plain-language summary sentences shown first in every report."
+    },
+    "assuranceLevel": {
+      "enum": [
+        "L1",
+        "L2",
+        "L3",
+        "L4"
+      ],
+      "description": "L1 self-tested (Saktum Check); L2 independently tested; L3 certified; L4 continuously certified."
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": [
+        "check",
+        "pack",
+        "status",
+        "severity",
+        "title"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "type": "string"
+        },
+        "pack": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "skipped",
+            "inconclusive",
+            "info"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "scored": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "fix": {
+          "type": "string"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hash": {
+              "type": "string"
+            },
+            "excerpt": {
+              "type": "string",
+              "maxLength": 240
+            }
+          }
+        }
+      }
+    }
+  }
+}

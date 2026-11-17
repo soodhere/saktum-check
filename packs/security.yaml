@@ -1,0 +1,45 @@
+packFormat: "0.1"
+id: security
+version: 0.1.0
+category: security
+description: Passive security checks on what the server tells agents and users.
+checks:
+  - id: sec.description.hidden-instructions
+    title: No instructions to the agent in tool descriptions or schemas
+    severity: critical
+    safety: passive
+    steps: [{ action: analyse, analyser: hidden-instructions }]
+    fix: Describe what each tool does; never instruct the agent (for example to read other data, send data elsewhere or hide actions from the user).
+    normative: [{ source: "OWASP MCP Top 10", clause: "MCP03 Tool Poisoning", level: best-practice }]
+    references: ["MCP security best practices", "CWE-1427", "OWASP MCP Top 10: MCP03 Tool Poisoning", "OWASP MCP Top 10: MCP06 Intent Flow Subversion"]
+  - id: sec.description.invisible-text
+    title: No invisible or bidirectional control characters
+    severity: high
+    safety: passive
+    steps: [{ action: analyse, analyser: invisible-text }]
+    fix: Remove zero-width and bidirectional control characters from names, descriptions and schemas.
+    references: ["CWE-1007", "OWASP MCP Top 10: MCP03 Tool Poisoning"]
+  - id: sec.description.control-characters
+    title: No escape sequences or control characters
+    severity: high
+    safety: passive
+    steps: [{ action: analyse, analyser: control-characters }]
+    fix: Remove terminal escape sequences and control characters; clients may print tool text to a terminal.
+    references: ["CWE-150", "OWASP MCP Top 10: MCP03 Tool Poisoning"]
+  - id: sec.secrets.exposed
+    title: No secrets in tool definitions or responses
+    severity: critical
+    safety: passive
+    steps: [{ action: analyse, analyser: secrets }]
+    fix: Remove keys, tokens and passwords from descriptions, schemas, defaults, examples and error messages; load them from a secret store at runtime.
+    references: ["OWASP MCP Top 10: MCP01 Token Mismanagement and Secret Exposure", "CWE-798", "CWE-200"]
+    normative: [{ source: "OWASP MCP Top 10", clause: "MCP01 Token Mismanagement and Secret Exposure", level: best-practice }]
+  - id: sec.errors.leakage
+    title: Errors do not expose internals
+    severity: medium
+    safety: passive
+    steps: [{ action: analyse, analyser: error-leakage }]
+    fix: Return short, actionable error messages; log stack traces, file paths and database errors on the server only.
+    references: ["OWASP MCP Top 10: MCP08 Lack of Audit and Telemetry (errors leak internals)", "CWE-209"]
+    normative: [{ source: "OWASP MCP Top 10", clause: "Information exposure through errors", level: best-practice }]
+

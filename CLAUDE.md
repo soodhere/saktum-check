@@ -1,0 +1,100 @@
+# CLAUDE.md: working rules for this repository
+
+Saktum Trust Check tests MCP servers and agents (conformance, sign-in, security, function, agent experience) and produces a score, fixes and a signed, verifiable result. It is the base of the Saktum platform: its contracts, engine, transports and signing are reused by hosted certification, bounties and the gateway (from April 2027). **Nothing here is throwaway.**
+
+Plan of record: "Saktum Trust Check — product, design and release plan to 1.0" (Baseline 6.0, frozen for execution; public name Saktum Check, internal name Trust Check). Current step (rebaselined 3 Nov 2026): **finish Infrastructure by 16 Nov**, then v0.1 private beta by 30 Nov; v0.2 14 Dec; public launch with v0.3 about 19 Jan 2027; v1.0 by 30 Apr 2027.
+
+## Commands
+- `pnpm install` · `pnpm build` (tsc project references) · `pnpm test` (Vitest; spawns fixture servers)
+- `pnpm saktum check -- <command that starts a server>` or `pnpm saktum check https://host/mcp`
+- `pnpm saktum verify saktum-report.json`
+- Fixtures: `pnpm fixture:good|broken|malicious` (add `--http 0` for Streamable HTTP)
+
+## Repository map
+- `contracts/` JSON Schemas (2020-12): pack, result, test cases, call envelope, receipt. **Change contracts first, then code.** Every schema has an example in `contracts/examples/`.
+- `packs/` checks as data (YAML). Steps use a closed set of actions; logic lives in named analysers.
+- `packages/testkit-core` engine: pack loader (signature-aware), runner, analysers, scoring, sanitiser.
+- `packages/transports` MCP sessions over Streamable HTTP and stdio via the official SDK, read **tolerantly** (see ADR 0006).
+- `packages/sign` RFC 8785 canonical JSON, Ed25519 detached JWS, did:key, local key storage.
+- `packages/report` terminal and HTML renderers.
+- `packages/cli` the `saktum` command.
+- `fixtures/` good, broken, malicious and raw-protocol servers. `corpus/` real servers for validation runs.
+- `docs/adr/` architecture decisions. Read them before changing anything structural.
+
+## Non-negotiable rules
+1. **Untrusted input.** Everything from a tested server is hostile. No server text reaches a terminal, report or log without `sanitizeText` (terminal) or `escapeHtml(sanitizeText(...))` (HTML). Responses are size- and depth-limited.
+2. **Packs are data.** Never execute code from a pack. New logic goes into `analysers.ts`, versioned with the engine.
+3. **Testing the tests.** Every scored check needs a fixture where it passes and one where it fails (`test/packs.test.ts` enforces this).
+4. **Deterministic scoring.** Weights: critical 5, high 3, medium 2, low 1. Trust score = conformance 30%, sign-in 30%, security 40%; any failed critical check caps it at 49. Agent experience, functional tests and context cost are reported, never part of the trust score. No model ever decides a pass or fail.
+5. **Inconclusive is not fail.** Timeouts, network errors and size limits produce `inconclusive`. A server that answers wrongly produces `fail`.
+6. **Safety model.** Passive checks run against anything. Active checks and side-effect tests run only with `--active` against owned targets. Local servers get a minimal environment; secrets only via explicit `--env`.
+7. **Honest signatures.** Local results are "self-run, self-signed": they prove integrity, not independence. Say so in every report.
+8. **Polite.** Low concurrency, timeouts, identifying user agent (`saktum-trust-check/...`).
+9. **Formats are versioned contracts** (`packFormat`, `resultFormat`, ...). Additive changes only within a minor version; breaking changes need a new major and a migration.
+10. **Standards first**: MCP specification, JSON Schema 2020-12, JSON-RPC 2.0, OAuth RFCs, SARIF, RFC 7515/8785, did:key, CWE references.
+
+## Definition of done (every change)
+Typecheck and tests pass on Linux, macOS, Windows; new checks have passing and failing fixtures; no secret or raw payload in any output; docs updated; corpus run shows no new false positives.
+
+## Lean backlog (Baseline 1.7), in order. Do the smallest thing that ships.
+
+### Infrastructure, minimum before v0.1
+- [ ] Release workflow: changesets, npm publish with provenance, SBOM (set up; do not publish until the employer IP confirmation)
+- [ ] Nightly corpus runner over `corpus/corpus.yaml`, diffing against the previous run (the false-positive safety net)
+- Later in the step, only if time allows: benchmarks in CI, pack-signing key ceremony, docs site skeleton, recovery runbook
+
+### v0.1 private beta (target 30 Nov): beta users test their own, trusted servers
+- [ ] Every check carries its OWASP MCP Top 10 ID in `references` (started in the packs); reports show an "OWASP MCP Top 10 coverage" section listing categories tested in this run and those planned (Baseline 3.3)
+- [ ] Auth pack: 5 passive metadata checks (`auth.https`, `auth.www-authenticate`, `auth.resource-metadata`, `auth.server-metadata`, `auth.invalid-token`), each with passing and failing fixtures (add an OAuth-metadata fixture server)
+- [x] `sec.secrets.exposed` and `sec.errors.leakage` (secrets, stack traces, paths in results and errors)
+- [x] Context cost in money: `--price-per-mtok <n>` (user-set), shown next to tokens; never part of the trust score
+- [ ] Human layer first: letter grade (A 90-100, B 80-89, C 70-79, D 50-69, F below 50 or any failed critical check) and a three-sentence plain-language summary at the top of terminal and HTML reports; "why this matters to your users" line on every finding. Plain words first, technical detail second. Publicly the tool is "Saktum Check".
+- [x] Basic `saktum doctor`: runtime and version, npx and NVM on PATH, server starts, needs network or credentials at start, handshake
+- [ ] Invite the beta users (see the Trust Check plan's evidence section)
+
+### v0.3 additions (public launch)
+Framework tags on every finding (NIST AI RMF function and Generative AI Profile, ISO/IEC 27001 and 42001 control areas, OWASP Top 10 for LLM applications, OWASP Top 10 for agentic applications, MITRE ATLAS, CWE), resolved from a signed framework reference catalogue (data file shared with Govern), shown in reports and SARIF. GitLab CI and Azure DevOps templates alongside the GitHub Action.
+
+### Contracts note (Baseline 2.0)
+The call envelope has an optional `context` (task, process, orchestrator, rationale, executor) and the receipt an optional `explanation` and `compensates` link, for the gateway's governance features (main plan LLD 39). Keep them optional and additive.
+
+### Deferred to v0.2 (before the public launch)
+Docker sandbox for local servers; remaining passive checks; (v0.3: badge with grade and date that fades after 90 days or when tools change; shareable report-card image); basic `saktum test`; active checks with proof of ownership; sign-in registration and redirect checks; lock file and "what changed"; `explain`; signed pack feed.
+
+## Scope discipline (Baseline 4.0)
+- Each release ships its **core** scope only (see the plan's 4.0 table). Stretch items wait for Saktum Check 1.1 (Jun 2027) or 1.2 (Sep 2027): `--semantic` mode, memory-leakage and unsafe-delegation tests, compensation tests, `inspect`, `docs`, open benchmark publication, VS Code preview.
+- v0.9 includes `--registry <path>`: write the signed result into `evidence/test_results/` of the open governance registry format.
+- New ideas go to the backlog by default; they enter a release only by replacing something of equal size, or after a decision gate. If a task is not in the current release's core, ask before building it.
+
+## Traceable conformance (Baseline 4.1)
+- Every check gets a structured `normative` list (source, version, clause, level MUST/SHOULD/MAY/best-practice). Four checks are filled; fill the rest by v0.3 and **verify clause wording against the current MCP specification and RFCs** (entries marked `verify-latest`).
+- Generate the public traceability matrix and test specification from the packs (never hand-written separately). Publish accuracy (false-positive and false-negative rates) per check from the corpus.
+- Every report states its assurance level; Saktum Check results are L1 (self-tested).
+
+## Standards-traced core (Baseline 5.0)
+Read docs/adr/0007-0010. Core additions: clause traceability for sign-in checks; token-passthrough and audience check (v0.2); refresh-rotation reporting (v0.4); OpenSSF Scorecard signals (v0.5); Saktum Agent Security Profile Baseline tests (draft at launch, conformance in v1.0); every report states its assurance level (L1). Saktum's own releases target SLSA level 3.
+
+## Pre-execution freeze (Baseline 6.0)
+- The plan is frozen. Do not add scope: anything new goes to a BACKLOG.md entry with its source, for review at the next decision gate.
+- Exception: a public MCP incident becomes a fixture and regression test in the incident library (start at v0.3; supply-chain patterns in v0.5).
+- v0.5 report: flag tool sets enabling the lethal trifecta (private data + untrusted content + external communication) using capability classes.
+- Never claim that nobody certifies AI: Saktum's evidence feeds AIUC-1, CSA STAR for AI, HITRUST AI and ISO/IEC 42001 audits.
+
+## Four-week cadence (Baseline 6.1): the only work until 13 Dec 2026
+Goal by Tue 8 Dec: 5 developers ran it on their own servers, 3 fixed a finding, 2 quotes. v0.1 scope, exactly:
+- [x] Grade (A 90-100, B 80-89, C 70-79, D 50-69, F below 50 or any failed critical) and three-sentence plain summary
+- [x] Five sign-in metadata checks (HTTPS, WWW-Authenticate, protected-resource metadata RFC 9728, server metadata RFC 8414, invalid-token rejection) with an OAuth fixture server
+- [x] `sec.secrets.exposed` and `sec.errors.leakage` with passing and failing fixtures
+- [x] Context cost in money (`--price-per-mtok`) and largest tools
+- [x] Basic `saktum doctor`
+- [x] OWASP MCP Top 10 coverage section in reports; one-page quickstart
+- [x] Single-file bundle `saktum.mjs` (esbuild) attached to a private GitHub Release
+Not in scope: Docker sandbox, GitHub Action, hosted services, telemetry. See docs/BETA.md for invites and metrics.
+
+## v0.1.0 built and validated (16 Nov 2026)
+24 checks in 5 packs (conformance 6, auth 6, security 5, agent experience 3, performance 4); 62 tests. Validated on 37 real
+npm and Python servers (31 assessed): see docs/VALIDATION.md for results and the six Saktum bugs the run found and fixed.
+Observation for the December gate: grades cluster at A because v0.1 checks are mostly hygiene; v0.2's active and deeper
+sign-in checks will differentiate. Revisit severity weights (for example missing danger annotations) with beta feedback.
+Before inviting users: run a few real remote servers, with and without a token (the sandbox could not reach any).
+Next: push to the private repository, tag v0.1.0, invite beta users (docs/BETA.md, docs/QUICKSTART.md).
