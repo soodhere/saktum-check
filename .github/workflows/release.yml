@@ -1,0 +1,49 @@
+# Release: runs every test, builds saktum.mjs, smoke-tests it, attaches it to a GitHub Release,
+# and (when the NPM_TOKEN secret is set) publishes the "saktum" package to npm with provenance.
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to create and release, for example v0.1.0"
+        required: true
+        default: "v0.1.0"
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.version || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point links at this repository
+        run: sed -i "s#OWNER/saktum-check#${GITHUB_REPOSITORY}#g" npm/package.json packages/report/src/index.ts docs/QUICKSTART.md
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm bundle
+      - name: Smoke-test the bundle from an empty directory
+        run: |
+          mkdir /tmp/smoke && cp dist-bundle/saktum.mjs /tmp/smoke/ && cd /tmp/smoke
+          node saktum.mjs --version
+          node saktum.mjs doctor
+      - name: Create the release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          gh release create "$TAG" dist-bundle/saktum.mjs dist-bundle/saktum.mjs.sha256 --target "$GITHUB_SHA" \
+            --title "Saktum Check $TAG" --notes-file docs/QUICKSTART.md --prerelease
+      - name: Publish to npm with provenance
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+        if: env.NODE_AUTH_TOKEN != ''
+        run: |
+          cp dist-bundle/saktum.mjs README.md LICENSE npm/
+          cd npm
+          test "v$(node -p "require('./package.json').version")" = "$TAG" || { echo "npm/package.json version must match the tag"; exit 1; }
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          npm publish --provenance --access public
