@@ -1,0 +1,14 @@
+name: Suggest a check
+description: Something Saktum Check should test but does not.
+labels: [missing-check, feedback]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: What should it check?, description: The problem you have seen in a real MCP server or agent. }
+    validations: { required: true }
+  - type: textarea
+    id: impact
+    attributes: { label: What goes wrong if it is missed?, description: For your users, your agents or your security team. }
+  - type: dropdown
+    id: area
+    attributes: { label: Area, options: [Conformance, Sign-in and authorisation, Security, Agent experience, Performance, CI and workflow, Other] }
