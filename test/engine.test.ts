@@ -20,10 +20,10 @@ describe("engine against fixtures (stdio)", () => {
   });
 
   it("broken fixture fails exactly the expected checks", () => {
-    expect(fails(broken)).toEqual(["ax.annotations", "ax.short-descriptions", "conf.tools.names", "conf.tools.schema-valid", "conf.tools.unknown-error-code", "conf.tools.unknown-not-success"]);
-    expect(broken.scores.categories.conformance).toBe(40);
+    expect(fails(broken)).toEqual(["ax.annotations", "ax.short-descriptions", "conf.tools.names", "conf.tools.schema-valid", "conf.tools.unknown-not-success"]);
+    expect(broken.scores.categories.conformance).toBe(43);
     expect(broken.scores.categories.security).toBe(100);
-    expect(broken.scores.overall).toBe(74);
+    expect(broken.scores.overall).toBe(76);
     expect(broken.scores.capped).toBe(false);
   });
 

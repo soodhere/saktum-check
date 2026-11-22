@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { Target } from "@saktum/transports";
 
 export const root = fileURLToPath(new URL("../", import.meta.url));
-export type FixtureName = "good" | "broken" | "malicious" | "leaky" | "empty" | "raw-init" | "raw-list";
+export type FixtureName = "good" | "broken" | "malicious" | "leaky" | "empty" | "faulty" | "raw-init" | "raw-list";
 export const fixture = (name: FixtureName): Target => name.startsWith("raw-")
   ? { kind: "stdio", command: process.execPath, args: ["--import", "tsx", "fixtures/src/raw-protocol.ts", "--mode", name.slice(4)], cwd: root }
   : { kind: "stdio", command: process.execPath, args: ["--import", "tsx", `fixtures/src/${name}.ts`], cwd: root };

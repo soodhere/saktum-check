@@ -1,0 +1,20 @@
+# Test cases for the good fixture (format: contracts/test-cases.schema.json; guide: docs/TESTS.md).
+testsFormat: "0.1"
+tests:
+  - id: forecast-toronto
+    tool: get_forecast
+    input: { city: Toronto }
+    expect: { isError: false, textContains: "Toronto", structured: { city: Toronto }, outputSchema: true, latencyMs: { lt: 5000 } }
+  - id: forecast-needs-city
+    tool: get_forecast
+    input: {}
+    expect: { isError: true, textContains: "city is required" }
+  - id: deliberately-wrong
+    tool: get_forecast
+    input: { city: Paris }
+    expect: { textContains: "rain" }
+  - id: save-note
+    tool: save_note
+    input: { text: "hello" }
+    sideEffects: true
+    expect: { isError: false }

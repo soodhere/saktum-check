@@ -18,7 +18,8 @@ export const perfAnalysers: Record<string, Analyser> = {
     const slow = perf.initMs > PERF_THRESHOLDS.startupMs;
     return { status: "info", message: `${what} in ${perf.initMs} ms.${slow ? " That is slow: agents and clients may time out." : ""}` };
   },
-  "perf-latency": ({ perf }) => {
+  "perf-latency": ({ perf, load }) => {
+    if (load) return { status: "info", message: `${load.verdicts[0]} (p50 ${load.latency.p50} ms over ${load.latency.samples} samples; tool list ${Math.round((perf?.listBytes ?? 0) / 1024)} KB).` };
     if (perf?.listMs === undefined) return { status: "inconclusive", message: "Tool-list latency was not measured." };
     const notes: string[] = [];
     if (perf.listMs > PERF_THRESHOLDS.listMs) notes.push("slow to list tools");
@@ -33,14 +34,11 @@ export const perfAnalysers: Record<string, Analyser> = {
     const heavy = perf.rssMb > PERF_THRESHOLDS.rssMb;
     return { status: "info", message: `Uses ${perf.rssMb} MB of memory (including any launcher such as npx); averaged ${perf.cpuPct}% CPU since start-up.${heavy ? " That is a lot of memory for a tool server." : ""}` };
   },
-  "perf-burst": ({ perf }) => {
-    const b = perf?.burst;
-    if (!b) return { status: "inconclusive", message: "The burst test did not run." };
-    const parts = [`${b.ok} of ${b.requests} concurrent requests succeeded (p95 ${b.p95Ms} ms)`];
-    if (b.rateLimited) parts.push(`${b.rateLimited} were rate-limited, which is healthy behaviour`);
-    if (b.errors) parts.push(`${b.errors} failed with errors under light load`);
-    return { status: "info", message: `${parts.join("; ")}.` };
+  "perf-concurrency": ({ load }) => {
+    if (!load) return { status: "inconclusive", message: "The load measurement did not run." };
+    const levels = load.levels.map((l) => `${l.concurrency} caller${l.concurrency === 1 ? "" : "s"}: ${l.ok}/${l.requests} ok, p95 ${l.p95} ms, ${l.throughput}/s`).join("; ");
+    return { status: "info", message: `${load.verdicts.join(" ")} Measured by ${load.operation} (${levels}).${load.memoryGrowthMb !== undefined ? ` Memory grew by ${load.memoryGrowthMb} MB during the run.` : ""}` };
   }
 };
 
-export const PERF_NEEDS = { "perf-startup": "session" as const, "perf-latency": "session" as const, "perf-memory": "session" as const, "perf-burst": "session" as const };
+export const PERF_NEEDS = { "perf-startup": "session" as const, "perf-latency": "session" as const, "perf-memory": "session" as const, "perf-concurrency": "session" as const };

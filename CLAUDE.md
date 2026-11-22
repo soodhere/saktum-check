@@ -105,3 +105,11 @@ Next: push to the private repository, tag v0.1.0, invite beta users (docs/BETA.m
 - Until the 13 Dec gate: v0.1.x fixes from public feedback only. Gate: at least 10 people giving feedback, at least 3
   server reports, and a clear v0.2 priority. v0.2 scope is chosen from the Discussions poll and issues.
 - Posture: public repository, no LinkedIn promotion. Never name specific servers' findings in public.
+
+## v0.2.0 (22 Nov 2026): functional testing and transparency
+Functional pack (active: respond, output schema, graceful errors, survival); provider test cases (`saktum test`,
+docs/TESTS.md); load (latency percentiles, 1/5/20 concurrency, memory growth); conservative capability profile and
+lethal-trifecta warning; trust card and scope of run in every report; `saktum checks` (docs/CHECKS.md); `--ignore` with
+reasons; `--badge`. Safety: tools are called only with --active, only read-only tools unless named with --call or in a
+test case; destructive tools never automatically. 94 tests; validated passive on 30 servers and active on 7 with no
+false failures (docs/VALIDATION.md). Keep capability inference conservative: any new rule must be re-reviewed on the corpus.

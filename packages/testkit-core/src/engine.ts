@@ -3,15 +3,17 @@ import { connect, describeTarget, probeInitialize, processUsage, ShapeError, typ
 import { contextCost, needsOf, type AnalyserContext } from "./analysers.js";
 import { gradeFor, summarise } from "./grade.js";
 import { readinessFor } from "./readiness.js";
+import { capabilityProfile } from "./capabilities.js";
+import { runFunctional, runTestCases, type FunctionalReport, type TestCase, type TestResult } from "./functional.js";
+import { measureLoad } from "./load.js";
 import { checkNeedsSession, runCheck, SIGN_IN_HINT } from "./runner.js";
 import { sanitizeText } from "./safe.js";
 import { score, TRUST_WEIGHTS } from "./scoring.js";
 import type { Finding, LoadedPack, Result } from "./types.js";
 
-export const ENGINE_VERSION = "0.1.4";
+export const ENGINE_VERSION = "0.2.0";
 export const UNKNOWN_TOOL = "saktum_trust_check_no_such_tool";
 const INVALID_TOKEN = "saktum-check-deliberately-invalid-token";
-const BURST_REQUESTS = 20;
 
 export type NoGrade = { kind: "sign-in" } | { kind: "no-tools"; toolsCapability: boolean } | { kind: "list-failed"; error: string } | { kind: "too-few" };
 
@@ -21,6 +23,12 @@ export interface RunOptions {
   session?: Session;
   /** Price per million input tokens for the cost estimate (reported only). Default 3. */
   pricePerMTokUsd?: number;
+  /** v0.2: tools the provider explicitly allows Saktum to call in active runs, even if not annotated read-only. */
+  callTools?: string[];
+  /** v0.2: provider test cases (saktum.tests.yaml). */
+  testCases?: TestCase[];
+  /** v0.2: checks to ignore, each with a reason shown in the report. */
+  ignore?: { check: string; reason: string }[];
 }
 
 /** Connection problems (nothing answered) are not findings; protocol problems (something answered wrongly) are. */
@@ -37,8 +45,9 @@ const baseOf = (pack: LoadedPack["pack"], check: LoadedPack["pack"]["checks"][nu
 /** Minimum number of scored checks that must actually run (pass or fail) before a grade is given. */
 export const MIN_GRADED_CHECKS = 5;
 
-function finish(target: Target, opts: RunOptions, startedAt: Date, findings: Finding[], extra: Partial<Result["target"]>, metrics: Result["metrics"], sandbox: "none" | "docker", noGrade: NoGrade | undefined, readiness: Result["readiness"] = null): Result {
-  const categoryOf = (id: string) => opts.packs.find((p) => p.pack.id === id)?.pack.category ?? "other";
+function finish(target: Target, opts: RunOptions, startedAt: Date, findings: Finding[], extra: Partial<Result["target"]>, metrics: Result["metrics"], sandbox: "none" | "docker", noGrade: NoGrade | undefined, readiness: Result["readiness"] = null, more: Partial<Result> = {}): Result {
+  const categoryOf = (id: string) => (id === "tests" ? "functional" : opts.packs.find((p) => p.pack.id === id)?.pack.category ?? "other");
+  applySuppressions(findings, opts.ignore);
   const scores = score(findings, categoryOf);
   // A grade must never overstate what was examined: withhold it when the tools could not be assessed.
   const ran = findings.filter((f) => f.scored && (f.status === "pass" || f.status === "fail") && categoryOf(f.pack) in TRUST_WEIGHTS).length;
@@ -49,24 +58,29 @@ function finish(target: Target, opts: RunOptions, startedAt: Date, findings: Fin
     tool: { name: "saktum-trust-check", version: ENGINE_VERSION },
     target: { transport: target.kind, description: describeTarget(target), ...extra },
     packs: opts.packs.map((p) => ({ id: p.pack.id, version: p.pack.version, hash: p.hash })),
-    findings, scores, grade, assuranceLevel: "L1", metrics, readiness, coverage: { trustChecksRun: ran },
+    findings, scores, grade, assuranceLevel: "L1", metrics, readiness, coverage: { trustChecksRun: ran }, ...more,
+    ...(opts.ignore?.length ? { suppressions: opts.ignore.map((i) => ({ check: i.check, reason: sanitizeText(i.reason, 200) })) } : {}),
     run: { startedAt: startedAt.toISOString(), durationMs: Date.now() - startedAt.getTime(), mode: opts.mode ?? "passive", runner: "self", sandbox }
   };
   r.summary = summarise(r, reason, (f) => categoryOf(f.pack) in TRUST_WEIGHTS);
   return r;
 }
 
-async function burst(session: Session): Promise<NonNullable<NonNullable<AnalyserContext["perf"]>["burst"]>> {
-  const times: number[] = [];
-  let ok = 0, rateLimited = 0, errors = 0;
-  await Promise.all(Array.from({ length: BURST_REQUESTS }, async () => {
-    const t = Date.now();
-    try { await session.listTools(); ok++; }
-    catch (e) { if (/\b429\b|rate.?limit/i.test(String((e as Error).message))) rateLimited++; else errors++; }
-    times.push(Date.now() - t);
-  }));
-  times.sort((a, b) => a - b);
-  return { requests: BURST_REQUESTS, ok, rateLimited, errors, p95Ms: times[Math.min(times.length - 1, Math.floor(times.length * 0.95))] ?? 0 };
+/** Findings the provider chose to ignore keep their result, are marked with the reason, and are not scored. */
+function applySuppressions(findings: Finding[], ignore: RunOptions["ignore"]): void {
+  if (!ignore?.length) return;
+  for (const f of findings) {
+    const rule = ignore.find((i) => i.check === f.check || (i.check.endsWith("*") && f.check.startsWith(i.check.slice(0, -1))));
+    if (rule) { f.suppressed = { reason: sanitizeText(rule.reason, 200) }; f.scored = false; }
+  }
+}
+
+/** A serialisable summary of the functional calls: never the raw content returned by tools. */
+function summariseFunctional(f: FunctionalReport): NonNullable<Result["functional"]> {
+  return { ran: f.ran, reason: f.reason, calledTools: f.calledTools, notCalled: f.notCalled, survived: f.survived,
+    calls: f.calls.map((c) => ({ tool: sanitizeText(c.tool, 60), purpose: c.purpose,
+      outcome: c.outcome.kind === "result" ? (c.outcome.isError ? "error result" : "success") : c.outcome.kind === "protocol-error" ? `protocol error ${c.outcome.code}` : c.outcome.kind,
+      latencyMs: c.outcome.latencyMs, problems: c.problems.map((x) => sanitizeText(x, 200)) })) };
 }
 
 export async function runTrustCheck(target: Target, opts: RunOptions): Promise<Result> {
@@ -106,6 +120,7 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
 
   try {
     // 3. Tools, safe probes and measurements.
+    let testResults: TestResult[] | undefined;
     let listError: string | undefined;
     let listShape = false;
     if (session) {
@@ -119,7 +134,20 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
       const readOnly = ctx.tools.find((t) => (t.annotations as { readOnlyHint?: boolean } | undefined)?.readOnlyHint === true && Array.isArray((t.inputSchema as { required?: unknown[] } | undefined)?.required) && ((t.inputSchema as { required: unknown[] }).required.length > 0));
       if (readOnly) ctx.probes!.invalidArgs = { tool: readOnly.name, outcome: (await session.callTool(readOnly.name, {})) as CallOutcome };
       if (session.pid) { const u = await processUsage(session.pid); if (u) { ctx.perf!.rssMb = u.rssMb; ctx.perf!.cpuPct = u.cpuPct; } }
-      if (mode === "active") ctx.perf!.burst = await burst(session);
+      if (mode === "active" && !listError) {
+        const rssBefore = ctx.perf!.rssMb;
+        ctx.functional = await runFunctional(session, ctx.tools, { active: true, allowTools: opts.callTools });
+        const smokeOk = ctx.functional.calls.find((c) => c.purpose === "smoke" && c.outcome.kind === "result" && !c.outcome.isError && c.problems.length === 0);
+        ctx.load = await measureLoad(session, smokeOk ? { tool: smokeOk.tool, args: smokeOk.args } : undefined);
+        if (session.pid && rssBefore !== undefined) {
+          const after = await processUsage(session.pid);
+          if (after) {
+            ctx.load.memoryGrowthMb = Math.round((after.rssMb - rssBefore) * 10) / 10;
+            if (ctx.load.memoryGrowthMb > Math.max(50, rssBefore * 0.5)) ctx.load.verdicts.push(`Memory grew by ${ctx.load.memoryGrowthMb} MB during the run: check for leaks.`);
+          }
+        }
+      } else if (mode !== "active") ctx.functional = { ran: false, reason: "Tools are called only with --active, against servers you own.", calledTools: [], notCalled: [], calls: [] };
+      if (opts.testCases?.length && !listError) testResults = await runTestCases(session, ctx.tools, opts.testCases, { active: mode === "active" });
     }
     const tools = ctx.tools;
     const fingerprint = sha256Tag(canonicalize([...tools].sort((a: ToolDef, b: ToolDef) => String(a.name).localeCompare(String(b.name)))));
@@ -144,6 +172,12 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
       }
     }
 
+    for (const t of testResults ?? []) findings.push({
+      check: `test.${sanitizeText(t.id, 80)}`, pack: "tests", severity: "medium", scored: t.status !== "skipped", status: t.status,
+      title: `Test case ${sanitizeText(t.id, 80)} (${sanitizeText(t.tool, 60)})`,
+      message: t.status === "pass" ? `Passed${t.latencyMs !== undefined ? ` in ${t.latencyMs} ms` : ""}.` : sanitizeText(t.problems.join("; "), 400),
+      ...(t.status === "fail" ? { fix: "Fix the tool, or update the test case if the expectation is wrong." } : {})
+    });
     const cost = contextCost(tools, price);
     const metrics: Result["metrics"] = { ...cost, pricePerMTokUsd: price, performance: { ...ctx.perf } };
     if (!session || listError) { delete metrics.contextCostTokens; delete metrics.largestTools; delete metrics.contextCostPer1kTurnsUsd; }
@@ -153,7 +187,12 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
       : undefined;
     return finish(target, { ...opts, mode }, startedAt, findings,
       session ? { protocolVersion: session.protocolVersion, serverInfo: session.serverInfo, toolsFingerprint: fingerprint, toolCount: tools.length } : { toolCount: 0 },
-      metrics, session?.sandbox ?? "none", noGrade, session && !listError ? readinessFor(tools) : null);
+      metrics, session?.sandbox ?? "none", noGrade, session && !listError ? readinessFor(tools) : null, {
+        ...(session && !listError && tools.length ? { capabilities: capabilityProfile(tools) } : {}),
+        ...(ctx.functional ? { functional: summariseFunctional(ctx.functional) } : {}),
+        ...(ctx.load ? { load: ctx.load } : {}),
+        ...(testResults ? { tests: testResults } : {})
+      });
   } finally {
     if (session && !opts.session) await session.close();
   }

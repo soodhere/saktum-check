@@ -26,11 +26,11 @@ checks:
     appliesTo: { transports: [stdio] }
     steps: [{ action: analyse, analyser: perf-memory }]
     fix: Reduce idle memory and CPU; local servers run beside the user's other tools.
-  - id: perf.burst
-    title: Behaviour under a short burst (rate limiting)
+  - id: perf.concurrency
+    title: Latency percentiles and behaviour at 1, 5 and 20 concurrent callers
     severity: info
     safety: active
     scored: false
-    steps: [{ action: analyse, analyser: perf-burst }]
-    fix: Answer overload with HTTP 429 and Retry-After instead of errors, and set limits per client.
+    steps: [{ action: analyse, analyser: perf-concurrency }]
+    fix: Keep p95 latency low, answer overload with HTTP 429 and Retry-After instead of errors, and set limits per client.
     references: ["OWASP MCP Top 10: MCP02 Privilege Escalation via Scope Creep (resource abuse)", "CWE-770"]

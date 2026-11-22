@@ -15,7 +15,7 @@ describe("contracts", () => {
   });
   it("all bundled packs validate against the pack contract", () => {
     const packs = loadPackDir(root + "packs");
-    expect(packs.map((p) => p.pack.id).sort()).toEqual(["agent-experience", "auth", "conformance", "performance", "security"]);
+    expect(packs.map((p) => p.pack.id).sort()).toEqual(["agent-experience", "auth", "conformance", "functional", "performance", "security"]);
     for (const p of packs) expect(p.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 });

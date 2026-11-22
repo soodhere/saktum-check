@@ -62,3 +62,20 @@ export function compileUntrustedSchema(schema: unknown): { ok: true } | { ok: fa
     return { ok: true };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
+
+/** Compile an untrusted schema (dialect-aware, as above) and return a validator for data, with readable errors.
+ *  Formats are checked where ajv-formats knows them; unknown keywords and formats are ignored, never fetched. */
+export function compileUntrustedSchemaValidator(schema: unknown):
+  | { ok: true; validate: (data: unknown) => boolean; errors: () => string }
+  | { ok: false; error: string } {
+  try {
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return { ok: false, error: "the schema is not a JSON object" };
+    const dialect = schemaDialect(schema);
+    if (dialect === "unknown") return { ok: false, error: "unrecognised $schema dialect" };
+    const { $schema: _ignored, ...body } = schema as Record<string, unknown>;
+    const Ctor = dialect === "2020-12" ? Ajv2020 : dialect === "2019-09" ? Ajv2019 : AjvDraft7;
+    const ajv = new Ctor({ strict: false, allErrors: false, validateSchema: true, logger: false });
+    const fn = ajv.compile(body);
+    return { ok: true, validate: (d) => Boolean(fn(d)), errors: () => (fn.errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message ?? ""}`).join("; ") };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}

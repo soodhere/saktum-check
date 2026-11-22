@@ -47,13 +47,10 @@ checks:
     fix: Return an error for unknown tool names; never a successful result.
     references: ["MCP specification: tools, error handling", "OWASP MCP Top 10: MCP08 Lack of Audit and Telemetry (false success hides actions)"]
   - id: conf.tools.unknown-error-code
-    title: Unknown tools get the expected error
-    severity: low
+    title: Error code for unknown tools
+    severity: info
     safety: passive
-    steps:
-      - action: mcp.callTool
-        tool: saktum_trust_check_no_such_tool
-        arguments: {}
-        expect: { anyOf: [{ errorCodeIn: [-32602] }, { isError: true }] }
-    fix: Respond to an unknown tool name with JSON-RPC error -32602 (invalid params), as in the specification's example.
+    scored: false
+    steps: [{ action: analyse, analyser: unknown-tool-code }]
+    fix: Answer an unknown tool name with a JSON-RPC error; the specification's example uses -32602 (invalid params).
     references: ["MCP specification: tools, error handling", "JSON-RPC 2.0"]

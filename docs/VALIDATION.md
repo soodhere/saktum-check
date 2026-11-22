@@ -97,3 +97,17 @@ v0.1.4 adds a second grade, **agent readiness** (annotations 30%, descriptions 4
 | slack-archived | B | C (70) | 0/8 | 777 | declare danger annotations (readOnlyHint, destructiveHint) on 8 of 8 tools |
 | supabase | no grade | - | - | - | none |
 | tavily | A | C (70) | 0/5 | 1,923 | declare danger annotations (readOnlyHint, destructiveHint) on 5 of 5 tools |
+
+## v0.2.0: functional testing, capability profile, load (22 Nov 2026)
+
+**Passive, 30 servers:** trust 30 A (the unknown-tool error code is now informational); agent readiness 17 A and 13 C.
+**Capability profile:** first draft inference produced false labels (a Git checkout as "moves money", a knowledge-graph
+search as "untrusted content", a lethal-trifecta warning on a well-built monitoring server). Rules were made conservative
+(declared, two agreeing signals, or unambiguous first-sentence wording; ambiguous words removed) and re-reviewed on all
+30 servers until every label was defensible.
+
+**Active, 7 local-resource servers** (reference servers, a scratch folder, a scratch Git repository, time, and one docs
+service): **no false failures.** Structured output was validated against a real declared `outputSchema`; generated
+arguments often produced error results (paths or repositories that do not exist), correctly not counted as failures;
+destructive tools were never called and unannotated tools were skipped with reasons; every server was fast at p95 and
+handled 20 concurrent callers with no errors.

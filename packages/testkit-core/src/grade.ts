@@ -29,12 +29,15 @@ export function summarise(r: Pick<Result, "findings" | "scores" | "metrics" | "g
   else if (r.grade === null || r.grade === undefined) lines.push("No grade: too few checks could run against this server to grade it fairly.");
   else if (fails.length === 0) lines.push(`Trust grade ${r.grade}: all ${passed} checks that apply passed.`);
   else lines.push(`Trust grade ${r.grade}: ${fails.length} problem${fails.length === 1 ? "" : "s"} found (${counts.map(([s, n]) => `${n} ${s}`).join(", ")}); ${passed} checks passed.`);
+  const fnFails = r.findings.filter((f) => (f.pack === "functional" || f.pack === "tests") && f.status === "fail" && f.scored);
+  const functionalLine = fnFails.length ? `Functional: ${fnFails.length} problem${fnFails.length === 1 ? "" : "s"}, first ${fnFails[0]!.title.charAt(0).toLowerCase()}${fnFails[0]!.title.slice(1)}: ${(fnFails[0]!.message ?? "").split(/(?<=\.)\s/)[0]!.replace(/\.$/, "")}.` : undefined;
   const rd = r.readiness;
   const readinessLine = rd && rd.grade && rd.topImprovement ? `Agent readiness ${rd.grade}: ${rd.topImprovement}.` : undefined;
   if (fails[0]) {
     const first = (fails[0].message ?? fails[0].title).split(/(?<=\.)\s/)[0]!.replace(/\.$/, "");
     lines.push(`Fix first (${fails[0].severity}): ${first.charAt(0).toLowerCase()}${first.slice(1)}.`);
   }
+  else if (functionalLine) lines.push(functionalLine);
   else if (readinessLine) lines.push(readinessLine);
   else lines.push("Nothing to fix in this run; keep running it in CI to catch regressions.");
   if (signInRequired) lines.push("Most checks need sign-in: re-run with --header \"Authorization: Bearer <token>\" to test the tools themselves.");

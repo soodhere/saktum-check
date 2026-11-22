@@ -16,6 +16,8 @@ export interface LoadedPack { pack: Pack; hash: string; signedBy?: string }
 export interface Finding {
   check: string; pack: string; status: Status; severity: Severity; scored: boolean; title: string;
   subject?: string; message?: string; fix?: string; references?: string[]; evidence?: { hash?: string; excerpt?: string };
+  /** Set when the provider chose to ignore this check (--ignore); suppressed findings are not scored. */
+  suppressed?: { reason: string };
 }
 
 export interface Result {
@@ -30,6 +32,16 @@ export interface Result {
   readiness?: { score: number; grade: "A" | "B" | "C" | "D" | "F" | null; toolsAnnotated: number; toolsDescribed: number; toolCount: number; contextTokens: number; topImprovement?: string } | null;
   /** How many scored trust checks (conformance, sign-in, security) actually ran in this run. */
   coverage?: { trustChecksRun: number };
+  /** v0.2: what the tools appear able to do (inferred, never scored). */
+  capabilities?: { capabilities: { capability: string; label: string; tools: string[]; basis: "declared" | "inferred" }[]; lethalTrifecta: boolean; note: string };
+  /** v0.2: which tools were called and how they behaved (active runs). */
+  functional?: { ran: boolean; reason?: string; calledTools: string[]; notCalled: { tool: string; why: string }[]; calls: { tool: string; purpose: string; outcome: string; latencyMs: number; problems: string[] }[]; survived?: boolean };
+  /** v0.2: latency percentiles and concurrency (active runs). */
+  load?: { operation: string; latency: { p50: number; p95: number; samples: number }; levels: { concurrency: number; requests: number; ok: number; rateLimited: number; errors: number; p95: number; throughput: number }[]; memoryGrowthMb?: number; verdicts: string[] };
+  /** v0.2: provider test cases (saktum.tests.yaml). */
+  tests?: { id: string; tool: string; status: "pass" | "fail" | "skipped"; problems: string[]; latencyMs?: number }[];
+  /** v0.2: checks the provider chose to ignore, with reasons (shown in every report). */
+  suppressions?: { check: string; reason: string }[];
   summary?: string[];
   assuranceLevel?: "L1";
   metrics: {

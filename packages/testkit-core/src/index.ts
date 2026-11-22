@@ -12,3 +12,6 @@ export * from "./leakage.js";
 export * from "./perf.js";
 export * from "./embedded.js";
 export * from "./readiness.js";
+export * from "./functional.js";
+export * from "./capabilities.js";
+export * from "./load.js";

@@ -370,6 +370,298 @@
           "minimum": 0
         }
       }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capabilities",
+        "lethalTrifecta",
+        "note"
+      ],
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "capability",
+              "label",
+              "tools",
+              "basis"
+            ],
+            "properties": {
+              "capability": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                "maxItems": 20
+              },
+              "basis": {
+                "enum": [
+                  "declared",
+                  "inferred"
+                ]
+              }
+            }
+          }
+        },
+        "lethalTrifecta": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 400
+        }
+      }
+    },
+    "functional": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ran",
+        "calledTools",
+        "notCalled",
+        "calls"
+      ],
+      "properties": {
+        "ran": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "calledTools": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 400
+          }
+        },
+        "survived": {
+          "type": "boolean"
+        },
+        "notCalled": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tool",
+              "why"
+            ],
+            "properties": {
+              "tool": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "why": {
+                "type": "string",
+                "maxLength": 400
+              }
+            }
+          }
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tool",
+              "purpose",
+              "outcome",
+              "latencyMs",
+              "problems"
+            ],
+            "properties": {
+              "tool": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "purpose": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "outcome": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "problems": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 400
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "load": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "latency",
+        "levels",
+        "verdicts"
+      ],
+      "properties": {
+        "operation": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "latency": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "p50": {
+              "type": "number"
+            },
+            "p95": {
+              "type": "number"
+            },
+            "samples": {
+              "type": "integer"
+            }
+          }
+        },
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "concurrency",
+              "requests",
+              "ok",
+              "rateLimited",
+              "errors",
+              "p95",
+              "throughput"
+            ],
+            "properties": {
+              "concurrency": {
+                "type": "number",
+                "minimum": 0
+              },
+              "requests": {
+                "type": "number",
+                "minimum": 0
+              },
+              "ok": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rateLimited": {
+                "type": "number",
+                "minimum": 0
+              },
+              "errors": {
+                "type": "number",
+                "minimum": 0
+              },
+              "p95": {
+                "type": "number",
+                "minimum": 0
+              },
+              "throughput": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "memoryGrowthMb": {
+          "type": "number"
+        },
+        "verdicts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "tool",
+          "status",
+          "problems"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "tool": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skipped"
+            ]
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 400
+            }
+          },
+          "latencyMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "suppressions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "check",
+          "reason"
+        ],
+        "properties": {
+          "check": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      }
     }
   },
   "$defs": {
@@ -439,6 +731,19 @@
             "excerpt": {
               "type": "string",
               "maxLength": 240
+            }
+          }
+        },
+        "suppressed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reason"
+          ],
+          "properties": {
+            "reason": {
+              "type": "string",
+              "maxLength": 400
             }
           }
         }

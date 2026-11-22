@@ -81,14 +81,14 @@ describe("performance, cost and the burst test", () => {
     if (process.platform !== "win32") expect(find(r, "perf.memory").message).toMatch(/MB of memory/);
     expect(r.metrics.pricePerMTokUsd).toBe(15);
     expect(r.metrics.contextCostPer1kTurnsUsd).toBeGreaterThan(0);
-    expect(find(r, "perf.burst").status).toBe("skipped");
+    expect(find(r, "perf.concurrency").status).toBe("skipped");
     expect(r.summary?.join(" ")).toMatch(/per 1,000 turns/);
     expect(r.findings.filter((f) => f.pack === "performance").every((f) => !f.scored)).toBe(true);
   });
-  it("runs the burst only with --active", async () => {
+  it("measures concurrency only with --active", async () => {
     const r = await runTrustCheck(fixture("good"), { packs, mode: "active" });
-    expect(find(r, "perf.burst").status).toBe("info");
-    expect(find(r, "perf.burst").message).toMatch(/20 of 20 concurrent requests succeeded/);
+    expect(find(r, "perf.concurrency").status).toBe("info");
+    expect(find(r, "perf.concurrency").message).toMatch(/Handled 20 concurrent callers with no errors/);
   });
 });
 
@@ -236,6 +236,6 @@ describe("v0.1.4: agent readiness, a second grade beside trust", () => {
     const text = renderTerminal(r);
     expect(text).toMatch(/TRUST {12}A/);
     expect(text).toMatch(/AGENT READINESS {2}[A-F]/);
-    expect(text).toMatch(/v0\.1 tests conformance, sign-in basics and security hygiene/);
+    expect(text).toMatch(/This version tests conformance, sign-in basics, security hygiene, functional behaviour/);
   });
 });

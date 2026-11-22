@@ -7,6 +7,9 @@ import { INVISIBLE, sanitizeText } from "./safe.js";
 import { authAnalysers, AUTH_NEEDS } from "./auth.js";
 import { leakageAnalysers, LEAKAGE_NEEDS } from "./leakage.js";
 import { perfAnalysers, PERF_NEEDS } from "./perf.js";
+import { functionalAnalysers, FUNCTIONAL_NEEDS } from "./functional-checks.js";
+import type { FunctionalReport } from "./functional.js";
+import type { LoadProfile } from "./load.js";
 
 export interface Verdict { status: "pass" | "fail" | "info" | "inconclusive" | "skipped"; message: string; subject?: string; evidence?: { hash?: string; excerpt?: string } }
 
@@ -23,6 +26,10 @@ export interface AnalyserContext {
   perf?: { initMs?: number; listMs?: number; listBytes?: number; rssMb?: number; cpuPct?: number; burst?: { requests: number; ok: number; rateLimited: number; errors: number; p95Ms: number } };
   /** User-set price per million input tokens, for the cost estimate (reported only). */
   pricePerMTokUsd?: number;
+  /** v0.2: smoke calls and invalid-argument probes (active runs only). */
+  functional?: FunctionalReport;
+  /** v0.2: latency percentiles and concurrency levels (active runs only). */
+  load?: LoadProfile;
 }
 export type Analyser = (ctx: AnalyserContext) => Verdict | Promise<Verdict>;
 /** What an analyser needs: nothing beyond the target, an MCP session, or the tool list. Default: tools. */
@@ -50,6 +57,14 @@ const HIDDEN_INSTRUCTION = [
 ];
 
 const coreAnalysers: Record<string, Analyser> = {
+  "unknown-tool-code": ({ probes }) => {
+    const o = probes?.unknownTool;
+    if (!o) return { status: "inconclusive", message: "The unknown-tool probe did not run." };
+    if (o.kind === "protocol-error" && (o.code === -32602 || o.code === -32601)) return { status: "pass", message: `Unknown tools get JSON-RPC error ${o.code} (${o.code === -32602 ? "invalid params, as in the specification's example" : "method not found, understood by most clients"}).` };
+    if (o.kind === "result" && o.isError) return { status: "pass", message: "Unknown tools get an error result." };
+    if (o.kind === "protocol-error") return { status: "info", message: `Unknown tools get JSON-RPC error ${o.code}. The MCP specification's example uses -32602 (invalid params); -32601 is also widely understood.` };
+    return { status: "info", message: "See the unknown-tool success check for how this server answers unknown tools." };
+  },
   handshake: ({ session }) => {
     if (!session) return { status: "inconclusive", message: "No MCP session (the server requires sign-in)." };
     const missing = [!session.serverInfo?.name && "serverInfo.name", !session.capabilities && "capabilities"].filter(Boolean);
@@ -107,7 +122,7 @@ const coreAnalysers: Record<string, Analyser> = {
   "context-cost": ({ tools, pricePerMTokUsd }) => {
     const { contextCostTokens, largestTools, contextCostPer1kTurnsUsd } = contextCost(tools, pricePerMTokUsd);
     const money = contextCostPer1kTurnsUsd !== undefined ? ` (about $${contextCostPer1kTurnsUsd.toFixed(2)} per 1,000 agent turns at $${pricePerMTokUsd} per million input tokens)` : "";
-    return { status: "info", message: `Tool definitions cost about ${contextCostTokens} tokens of agent context per turn when loaded upfront${money}. Largest: ${largestTools.slice(0, 3).map((s) => `${s.tool} (${s.tokens})`).join(", ") || "none"}.` };
+    return { status: "info", message: `Tool definitions cost about ${contextCostTokens.toLocaleString("en-US")} tokens of agent context per turn when loaded upfront${money}. Largest: ${largestTools.slice(0, 3).map((s) => `${s.tool} (${s.tokens})`).join(", ") || "none"}.` };
   }
 };
 
@@ -118,8 +133,8 @@ export function contextCost(tools: ToolDef[], pricePerMTokUsd?: number): { conte
   return { contextCostTokens, largestTools: sized.slice(0, 5), ...(per1k !== undefined ? { contextCostPer1kTurnsUsd: per1k } : {}) };
 }
 
-export const analysers: Record<string, Analyser> = { ...coreAnalysers, ...authAnalysers, ...leakageAnalysers, ...perfAnalysers };
+export const analysers: Record<string, Analyser> = { ...coreAnalysers, ...authAnalysers, ...leakageAnalysers, ...perfAnalysers, ...functionalAnalysers };
 
 /** What each analyser needs. Unlisted analysers need the tool list. */
-export const ANALYSER_NEEDS: Record<string, AnalyserNeeds> = { handshake: "session", ...AUTH_NEEDS, ...LEAKAGE_NEEDS, ...PERF_NEEDS };
+export const ANALYSER_NEEDS: Record<string, AnalyserNeeds> = { handshake: "session", "unknown-tool-code": "session", ...AUTH_NEEDS, ...LEAKAGE_NEEDS, ...PERF_NEEDS, ...FUNCTIONAL_NEEDS };
 export const needsOf = (name: string): AnalyserNeeds => ANALYSER_NEEDS[name] ?? "tools";

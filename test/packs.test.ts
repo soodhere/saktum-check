@@ -17,13 +17,15 @@ const UNIT_PROVEN_FAILURES: Record<string, () => Promise<string>> = {
   // A failing case needs plain HTTP on a non-local host; every test fixture runs on localhost, where HTTP is allowed.
   "auth.https": async () => (await analysers["auth-https"]!({ tools: [], target: { kind: "streamable-http", url: "http://api.example.com/mcp" } })).status
 };
-const BAD = ["broken", "malicious", "leaky", "raw-init", "raw-list", "oauth-broken"];
+const BAD = ["broken", "malicious", "leaky", "faulty", "raw-init", "raw-list", "oauth-broken"];
 
 describe("every check has a passing and a failing fixture", () => {
   const results: Record<string, Result> = {};
   const stops: (() => void)[] = [];
   beforeAll(async () => {
-    for (const f of ["good", "broken", "malicious", "leaky", "raw-init", "raw-list"] as const) results[f] = await runTrustCheck(fixture(f), { packs });
+    // good and faulty run in active mode, so the functional checks (active only) have a passing and a failing case.
+    for (const f of ["broken", "malicious", "leaky", "raw-init", "raw-list"] as const) results[f] = await runTrustCheck(fixture(f), { packs });
+    for (const f of ["good", "faulty"] as const) results[f] = await runTrustCheck(fixture(f), { packs, mode: "active" });
     for (const f of ["oauth-good", "oauth-broken"] as const) {
       const h = await startHttpFixture(f); stops.push(h.stop);
       results[f] = await runTrustCheck({ kind: "streamable-http", url: h.url, ...(f === "oauth-good" ? { headers: { Authorization: "Bearer fixture-good-token" } } : {}) }, { packs });

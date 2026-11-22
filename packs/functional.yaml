@@ -1,0 +1,35 @@
+packFormat: "0.1"
+id: functional
+version: 0.1.0
+category: functional
+description: Do the tools actually work? Smoke calls with arguments generated from each tool's schema, output validation and robustness. Runs only with --active, and only on tools annotated read-only unless named with --call.
+checks:
+  - id: func.tools.respond
+    title: Tools respond to valid arguments
+    severity: high
+    safety: active
+    steps: [{ action: analyse, analyser: func-respond }]
+    fix: Accept every argument set that satisfies the tool's own input schema, and answer within the client's timeout.
+    references: ["MCP specification: tools, calling tools"]
+    normative: [{ source: "MCP specification", version: "verify-latest", clause: "Tools: calling tools", level: MUST }]
+  - id: func.output.valid
+    title: Results are well-formed and match the declared output schema
+    severity: high
+    safety: active
+    steps: [{ action: analyse, analyser: func-output }]
+    fix: Return content as an array of typed items, and when a tool declares an outputSchema, return structuredContent that conforms to it.
+    references: ["MCP specification: tools, structured content and output schema"]
+    normative: [{ source: "MCP specification", version: "verify-latest", clause: "Tools: output schema (servers MUST provide structured results that conform)", level: MUST }]
+  - id: func.errors.graceful
+    title: Invalid arguments are rejected gracefully
+    severity: medium
+    safety: active
+    steps: [{ action: analyse, analyser: func-invalid }]
+    fix: Validate arguments against the input schema and return an error result or JSON-RPC -32602 with a short, helpful message; never crash, hang or expose internals.
+    references: ["MCP specification: tools, error handling", "CWE-20", "CWE-209", "OWASP MCP Top 10: MCP05 Command Injection and Execution (input validation)"]
+  - id: func.server.survives
+    title: The server keeps working after the functional calls
+    severity: high
+    safety: active
+    steps: [{ action: analyse, analyser: func-survives }]
+    fix: Catch errors per request so one bad call cannot stop the server.

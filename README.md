@@ -36,7 +36,22 @@ Runs on your machine. Nothing is uploaded. Your own environment variables are ne
 use your tools safely and cheaply (danger annotations, descriptions, context cost). Readiness never changes the trust
 grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories this run tested and which come later.
 
-## What it checks (v0.1: 24 checks)
+## Functional testing, performance and your own test cases
+
+- **`--active`** (only against servers you own): Saktum calls your **read-only** tools with arguments generated from
+  their schemas, validates results against any declared `outputSchema`, checks invalid arguments are rejected gracefully,
+  confirms the server survives, and measures latency percentiles and behaviour at 1, 5 and 20 concurrent callers.
+  Destructive tools are never called automatically; name others with `--call <tool>`.
+- **Your test cases** (`saktum.tests.yaml`, guide in [docs/TESTS.md](docs/TESTS.md)): what your tools should actually
+  return, run with `npx saktum test` locally and in CI.
+- **Capability profile:** what your tools can do (run code, reach the network, touch files, change data, send messages,
+  move money), declared or conservatively inferred, with a warning when private data, untrusted content and an outbound
+  channel combine.
+- **Trust card and scope:** every report says, dimension by dimension, what was tested, what was not, and why.
+  `npx saktum checks` lists every check with the standard behind it ([docs/CHECKS.md](docs/CHECKS.md)).
+- **Control:** `--ignore check.id="reason"` (shown in the report, not scored) and `--badge badge.svg` for your README.
+
+## What it checks
 
 | Area | Checks |
 | --- | --- |
@@ -44,9 +59,11 @@ grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories th
 | Sign-in (remote servers) | HTTPS; 401 with a Bearer challenge pointing to resource metadata (RFC 9728); protected resource metadata; authorization server metadata with PKCE S256 (RFC 8414, RFC 7636); invalid tokens rejected (RFC 6750) |
 | Security | Hidden instructions to the agent, invisible and bidirectional characters, terminal escape sequences, secrets in tools or errors (always redacted), stack traces and source paths in errors |
 | Agent experience | Danger annotations, description quality, context cost in tokens and dollars |
-| Performance (never scored) | Start-up, latency, memory of the whole process tree, and a rate-limit burst test with `--active` |
+| Functional (`--active` or test cases) | Tools respond to valid arguments; results well-formed and matching their `outputSchema`; invalid arguments rejected gracefully; the server survives |
+| Performance (never scored) | Start-up, latency percentiles, behaviour at 1, 5 and 20 concurrent callers, memory of the whole process tree |
 
-Validated on 31 public MCP servers before release. Each check cites the specification clause or OWASP item it verifies.
+Validated on real public MCP servers before every release ([docs/VALIDATION.md](docs/VALIDATION.md)), including active
+runs, with no false failures. Each check cites the specification clause or OWASP item it verifies.
 
 ## Options
 
