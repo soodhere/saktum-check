@@ -120,8 +120,10 @@ describe("doctor", () => {
 
 describe("embedded copies (single-file bundle)", () => {
   it("match contracts/ and packs/ exactly (run pnpm embed if this fails)", () => {
-    for (const f of readdirSync(root + "packs").filter((x) => /\.ya?ml$/.test(x))) expect(EMBEDDED_PACKS[f], f).toBe(readFileSync(root + "packs/" + f, "utf8"));
-    for (const f of readdirSync(root + "contracts").filter((x) => x.endsWith(".schema.json"))) expect(EMBEDDED_CONTRACTS[f], f).toBe(readFileSync(root + "contracts/" + f, "utf8"));
+    // Line endings are normalised: a Windows checkout may use CRLF without changing the content (pack hashes are computed from parsed content).
+    const lf = (t: string | undefined) => (t ?? "").replace(/\r\n/g, "\n");
+    for (const f of readdirSync(root + "packs").filter((x) => /\.ya?ml$/.test(x))) expect(lf(EMBEDDED_PACKS[f]), f).toBe(lf(readFileSync(root + "packs/" + f, "utf8")));
+    for (const f of readdirSync(root + "contracts").filter((x) => x.endsWith(".schema.json"))) expect(lf(EMBEDDED_CONTRACTS[f]), f).toBe(lf(readFileSync(root + "contracts/" + f, "utf8")));
     expect(loadEmbeddedPacks().map((p) => p.hash)).toEqual(packs.map((p) => p.hash));
   });
 });

@@ -24,6 +24,15 @@
     "esbuild": "0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.9"
+    "vitest": "4.1.12",
+    "vite": "7.3.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-uri": "^3.1.9",
+      "body-parser": "^2.4.0",
+      "hono": "^4.13.16",
+      "@hono/node-server": "^2.1.6"
+    }
   }
 }

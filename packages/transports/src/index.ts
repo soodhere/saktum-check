@@ -5,7 +5,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { McpError } from "@modelcontextprotocol/sdk/types.js";
 
-export const USER_AGENT = "saktum-check/0.1.2 (+https://saktum.dev/check)";
+export const USER_AGENT = "saktum-check/0.1.3 (+https://saktum.dev/check)";
 export const LIMITS = { requestTimeoutMs: 10_000, connectTimeoutMs: 60_000, maxResponseChars: 5_000_000 };
 
 export type TransportKind = "stdio" | "streamable-http";
@@ -153,7 +153,7 @@ export interface HttpProbe {
 
 const INIT_BODY = JSON.stringify({
   jsonrpc: "2.0", id: 1, method: "initialize",
-  params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "saktum-trust-check-probe", version: "0.1.2" } }
+  params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "saktum-trust-check-probe", version: "0.1.3" } }
 });
 
 /** One bounded HTTP request. Never throws: network failures come back as { status: null, error }. */

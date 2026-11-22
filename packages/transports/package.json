@@ -1,3 +1,15 @@
-{ "name": "@saktum/transports", "version": "0.0.1", "type": "module", "license": "Apache-2.0",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
-  "dependencies": { "@modelcontextprotocol/sdk": "^1.20.0" } }
+{
+  "name": "@saktum/transports",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  }
+}

@@ -23,8 +23,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node == 22
         run: pnpm bundle && node dist-bundle/saktum.mjs --version
   audit:
+    # Reports known vulnerabilities in dependencies (high and critical). Informational: an advisory in a development-only
+    # dependency should not block work, but it must be read and fixed.
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: google/osv-scanner-action/osv-scanner-action@v1
-        with: { scan-args: "--lockfile=pnpm-lock.yaml" }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high

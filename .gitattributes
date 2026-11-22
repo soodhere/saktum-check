@@ -1,0 +1,5 @@
+# Keep Unix line endings in the repository and in every checkout (Windows included), so files are identical everywhere.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary

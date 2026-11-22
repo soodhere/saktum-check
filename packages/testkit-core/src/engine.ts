@@ -7,7 +7,7 @@ import { sanitizeText } from "./safe.js";
 import { score } from "./scoring.js";
 import type { Finding, LoadedPack, Result } from "./types.js";
 
-export const ENGINE_VERSION = "0.1.2";
+export const ENGINE_VERSION = "0.1.3";
 export const UNKNOWN_TOOL = "saktum_trust_check_no_such_tool";
 const INVALID_TOKEN = "saktum-check-deliberately-invalid-token";
 const BURST_REQUESTS = 20;
