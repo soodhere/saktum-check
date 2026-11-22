@@ -1,0 +1,16 @@
+name: I tested my server
+description: Tell us how it went. Two minutes; it directly shapes v0.2.
+labels: [server-report, feedback]
+body:
+  - type: input
+    id: grade
+    attributes: { label: Grade you got (optional) }
+  - type: textarea
+    id: surprise
+    attributes: { label: Which finding surprised you, and which will you fix first? }
+  - type: dropdown
+    id: ci
+    attributes: { label: Would you run this in CI?, options: ["Yes, now", "Yes, once there is a GitHub Action", "Maybe", "No"] }
+  - type: textarea
+    id: missing
+    attributes: { label: What was missing or confusing? }

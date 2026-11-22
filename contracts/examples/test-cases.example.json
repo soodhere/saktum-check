@@ -1,0 +1,4 @@
+{ "testsFormat": "0.1", "tests": [
+  { "id": "refund-happy-path", "tool": "issue_refund", "input": { "order": "TEST-4417", "amount": 128 }, "sideEffects": true,
+    "expect": { "isError": false, "structured": { "status": "refunded" }, "latencyMs": { "lt": 800 } } },
+  { "id": "refund-over-limit", "tool": "issue_refund", "input": { "order": "TEST-9921", "amount": 640 }, "expect": { "isError": true, "textContains": "limit" } } ] }

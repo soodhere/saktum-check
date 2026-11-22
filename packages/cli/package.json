@@ -1,0 +1,17 @@
+{
+  "name": "saktum",
+  "version": "0.1.2",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Saktum Check: test MCP servers for conformance, sign-in, security and agent experience.",
+  "bin": {
+    "saktum": "./dist/main.js"
+  },
+  "dependencies": {
+    "@saktum/report": "workspace:*",
+    "@saktum/sign": "workspace:*",
+    "@saktum/testkit-core": "workspace:*",
+    "@saktum/transports": "workspace:*",
+    "commander": "^12.1.0"
+  }
+}

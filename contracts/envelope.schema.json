@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/schemas/envelope/0.1.json",
+  "title": "Saktum canonical call envelope",
+  "description": "Protocol-neutral description of one call between an agent and a service. Trust Check records calls in this shape; the gateway (2027) uses the same contract.",
+  "type": "object",
+  "required": [
+    "envelopeFormat",
+    "id",
+    "protocol",
+    "operation",
+    "target",
+    "timestamp"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "envelopeFormat": {
+      "const": "0.1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "protocol": {
+      "enum": [
+        "mcp",
+        "a2a",
+        "http"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "description": "e.g. tools/call"
+    },
+    "tool": {
+      "type": "string"
+    },
+    "caller": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "onBehalfOf": {
+          "type": "string"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "service"
+      ],
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "argumentsHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional governance context (Baseline 7.0): which task and business-process step this call belongs to. Policies may reference it; receipts echo it.",
+      "properties": {
+        "task": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "purpose": {
+              "type": "string"
+            },
+            "permissions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "process": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "step": {
+              "type": "string"
+            }
+          }
+        },
+        "orchestrator": {
+          "type": "string",
+          "description": "e.g. camunda, temporal, n8n"
+        },
+        "rationale": {
+          "type": "string",
+          "maxLength": 280,
+          "description": "Optional short reason the agent states for this call (Baseline 7.9); recorded on the receipt so reasoning is auditable without storing conversations."
+        },
+        "executor": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional (Baseline 8.4): the orchestrator that carried out the action on the agent's behalf, so receipts distinguish who decided, who executed and who authorised.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "e.g. orchestrator, rpa, gateway"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "instance": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

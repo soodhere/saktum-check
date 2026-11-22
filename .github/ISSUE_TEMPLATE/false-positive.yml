@@ -1,0 +1,18 @@
+name: Something looked wrong (false positive or wrong result)
+description: A finding that is not a real problem, or a result you disagree with.
+labels: [false-positive, feedback]
+body:
+  - type: input
+    id: check
+    attributes: { label: Check ID, description: "For example sec.errors.leakage", placeholder: "conf.tools.schema-valid" }
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes: { label: Why is it wrong?, description: What did the report say, and what is actually true? }
+    validations: { required: true }
+  - type: input
+    id: server
+    attributes: { label: Server (optional), description: Package name and version, or "private". }
+  - type: textarea
+    id: excerpt
+    attributes: { label: Report excerpt (optional), description: Remove anything sensitive first., render: text }

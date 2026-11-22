@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/schemas/pack/0.1.json",
+  "title": "Saktum Trust Check test pack",
+  "description": "A versioned set of checks. Packs are data, never code: steps use a closed set of actions, and any logic lives in named, engine-versioned analysers.",
+  "type": "object",
+  "required": [
+    "packFormat",
+    "id",
+    "version",
+    "category",
+    "checks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "packFormat": {
+      "const": "0.1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "category": {
+      "enum": [
+        "conformance",
+        "auth",
+        "security",
+        "agent-experience",
+        "performance",
+        "functional"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "signature": {
+      "type": "object",
+      "required": [
+        "alg",
+        "kid",
+        "jws"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "alg": {
+          "const": "EdDSA"
+        },
+        "kid": {
+          "type": "string",
+          "pattern": "^did:key:z"
+        },
+        "jws": {
+          "type": "string"
+        }
+      },
+      "description": "Detached JWS over the canonical pack without this member. Required for packs from the feed (v0.2)."
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "severity",
+        "safety",
+        "steps",
+        "fix"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+(\\.[a-z0-9-]+)+$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "safety": {
+          "enum": [
+            "passive",
+            "active"
+          ]
+        },
+        "scored": {
+          "type": "boolean",
+          "default": true
+        },
+        "appliesTo": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "transports": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "stdio",
+                  "streamable-http"
+                ]
+              }
+            },
+            "protocol": {
+              "type": "string",
+              "description": "Minimum protocol revision, e.g. >=2025-03-26"
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "fix": {
+          "type": "string"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "normative": {
+          "type": "array",
+          "description": "Baseline 4.1: the normative statements this check verifies, for the public traceability matrix.",
+          "items": {
+            "type": "object",
+            "required": [
+              "source",
+              "level"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "e.g. MCP specification, RFC 9728, OWASP MCP Top 10"
+              },
+              "version": {
+                "type": "string",
+                "description": "specification revision or date"
+              },
+              "clause": {
+                "type": "string",
+                "description": "section or requirement identifier"
+              },
+              "level": {
+                "enum": [
+                  "MUST",
+                  "SHOULD",
+                  "MAY",
+                  "best-practice"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "mcp.initialize",
+            "mcp.listTools",
+            "mcp.callTool",
+            "analyse"
+          ]
+        },
+        "tool": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": "object"
+        },
+        "analyser": {
+          "type": "string"
+        },
+        "expect": {
+          "$ref": "#/$defs/expectation"
+        }
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exists": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isError": {
+          "type": "boolean"
+        },
+        "errorCodeIn": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "failed": {
+          "type": "boolean",
+          "description": "The call must not succeed: either a protocol error or a tool result flagged as an error."
+        },
+        "anyOf": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expectation"
+          }
+        }
+      }
+    }
+  }
+}

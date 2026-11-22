@@ -1,0 +1,29 @@
+{
+  "name": "saktum-trustcheck",
+  "private": true,
+  "description": "Saktum Check: test MCP servers for conformance, sign-in, security and agent experience.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "tsc -b && vitest run",
+    "saktum": "tsx packages/cli/src/main.ts",
+    "fixture:good": "tsx fixtures/src/good.ts",
+    "fixture:broken": "tsx fixtures/src/broken.ts",
+    "fixture:malicious": "tsx fixtures/src/malicious.ts",
+    "embed": "node scripts/embed-assets.mjs",
+    "bundle": "node scripts/embed-assets.mjs && tsc -b && node scripts/bundle.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "esbuild": "0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}

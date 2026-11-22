@@ -1,0 +1,26 @@
+packFormat: "0.1"
+id: agent-experience
+version: 0.1.0
+category: agent-experience
+description: How easily and cheaply agents can use the server. Reported, never part of the trust score.
+checks:
+  - id: ax.context-cost
+    title: Context cost of tool definitions
+    severity: info
+    safety: passive
+    scored: false
+    steps: [{ action: analyse, analyser: context-cost }]
+    fix: Shorten long descriptions, split large servers, and drop tools agents rarely need.
+  - id: ax.annotations
+    title: Tools declare annotations
+    severity: low
+    safety: passive
+    steps: [{ action: analyse, analyser: annotations-present }]
+    fix: Set readOnlyHint, destructiveHint, idempotentHint and openWorldHint on every tool so clients can warn before risky actions.
+    references: ["MCP specification: tool annotations", "OWASP MCP Top 10: MCP02 Privilege Escalation via Scope Creep (undeclared write and destructive tools)"]
+  - id: ax.short-descriptions
+    title: Tools have usable descriptions
+    severity: low
+    safety: passive
+    steps: [{ action: analyse, analyser: short-descriptions }]
+    fix: Describe what the tool does, when to use it and when not to, in at least a full sentence.

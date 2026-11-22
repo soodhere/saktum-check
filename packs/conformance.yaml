@@ -1,0 +1,59 @@
+packFormat: "0.1"
+id: conformance
+version: 0.1.0
+category: conformance
+description: Does the server speak MCP correctly? Basis for every other check.
+checks:
+  - id: conf.init.handshake
+    title: Initialize returns server info and capabilities
+    severity: high
+    safety: passive
+    steps: [{ action: analyse, analyser: handshake }]
+    fix: Return serverInfo (name, version) and a capabilities object from initialize.
+    normative: [{ source: "MCP specification", version: "verify-latest", clause: "Lifecycle: initialization (server returns capabilities and serverInfo)", level: MUST }]
+    references: ["MCP specification: lifecycle"]
+  - id: conf.tools.list
+    title: Tool list is returned
+    severity: high
+    safety: passive
+    steps: [{ action: mcp.listTools, expect: { exists: [tools] } }]
+    fix: Implement tools/list and return a tools array (empty if you have none).
+    normative: [{ source: "MCP specification", version: "verify-latest", clause: "Server features: tools, listing tools", level: MUST }]
+    references: ["MCP specification: tools"]
+  - id: conf.tools.schema-valid
+    title: Every input schema is a valid JSON Schema object
+    severity: high
+    safety: passive
+    steps: [{ action: analyse, analyser: tool-input-schemas }]
+    fix: Give every tool an inputSchema of type "object" that compiles as JSON Schema.
+    normative: [{ source: "MCP specification", version: "verify-latest", clause: "Tools: inputSchema is a JSON Schema object", level: MUST }]
+    references: ["MCP specification: tools", "JSON Schema 2020-12", "OWASP MCP Top 10: MCP05 Command Injection and Execution (input validation)"]
+  - id: conf.tools.names
+    title: Tool names are unique and use allowed characters
+    severity: medium
+    safety: passive
+    steps: [{ action: analyse, analyser: tool-names }]
+    fix: Use unique names of 1 to 128 characters from A-Z, a-z, 0-9, underscore, dot and hyphen.
+    references: ["MCP specification: tools"]
+  - id: conf.tools.unknown-not-success
+    title: Calling an unknown tool does not succeed
+    severity: high
+    safety: passive
+    steps:
+      - action: mcp.callTool
+        tool: saktum_trust_check_no_such_tool
+        arguments: {}
+        expect: { failed: true }
+    fix: Return an error for unknown tool names; never a successful result.
+    references: ["MCP specification: tools, error handling", "OWASP MCP Top 10: MCP08 Lack of Audit and Telemetry (false success hides actions)"]
+  - id: conf.tools.unknown-error-code
+    title: Unknown tools get the expected error
+    severity: low
+    safety: passive
+    steps:
+      - action: mcp.callTool
+        tool: saktum_trust_check_no_such_tool
+        arguments: {}
+        expect: { anyOf: [{ errorCodeIn: [-32602] }, { isError: true }] }
+    fix: Respond to an unknown tool name with JSON-RPC error -32602 (invalid params), as in the specification's example.
+    references: ["MCP specification: tools, error handling", "JSON-RPC 2.0"]

@@ -1,0 +1,3 @@
+{ "packFormat": "0.1", "id": "example", "version": "1.0.0", "category": "conformance",
+  "checks": [{ "id": "conf.example.list", "title": "Tool list is valid", "severity": "high", "safety": "passive",
+    "steps": [{ "action": "mcp.listTools", "expect": { "exists": ["tools"] } }], "fix": "Return a tools array from tools/list." }] }
