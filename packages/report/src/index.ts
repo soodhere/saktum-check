@@ -7,6 +7,8 @@ const rank = (s: Severity) => SEV_ORDER.indexOf(s);
 const SYMBOL: Record<Finding["status"], string> = { fail: "\u2717 FAIL", inconclusive: "! INCONCLUSIVE", pass: "\u2713 PASS", skipped: "- SKIPPED", info: "i INFO" };
 /** Where users give feedback. Set by scripts/set-repo.mjs. */
 export const FEEDBACK_URL = "https://github.com/soodhere/saktum-check/discussions";
+/** Shown beside the trust grade, so an A reads as "passed what this version tests", not "proven safe". */
+export const COVERAGE_NOTE = "v0.1 tests conformance, sign-in basics and security hygiene; deeper sign-in, injection and supply-chain checks arrive in v0.2 to v0.6.";
 export const DISCLAIMER = "Findings describe this server at the time of the run. They are not a guarantee of security or correctness.";
 export const SELF_SIGNED_NOTE = "Assurance level L1 (self-tested): the signature proves this report was not changed after the run, not that it was run independently.";
 
@@ -48,7 +50,13 @@ export function renderTerminal(r: Result): string {
   lines.push(`Server: ${s(r.target.serverInfo?.["name"] ?? "unknown", 60)} ${s(r.target.serverInfo?.["version"] ?? "", 30)} \u00b7 ${r.target.toolCount ?? 0} tools`);
   if (r.run.sandbox === "none" && r.target.transport === "stdio") lines.push("Note: the local server ran without a sandbox. Only run servers you trust this way.");
   lines.push("");
-  lines.push(`  GRADE ${r.grade ?? "-"}${r.scores.overall !== null ? `  (trust score ${r.scores.overall}${r.scores.capped ? ", capped: a critical check failed" : ""})` : ""}`);
+  const ran = r.coverage?.trustChecksRun;
+  lines.push(`  TRUST            ${r.grade ?? "-"}${r.scores.overall !== null ? `  (score ${r.scores.overall}${r.scores.capped ? ", capped: a critical check failed" : ""}${ran !== undefined ? ` \u00b7 ${ran} checks` : ""})` : ""}`);
+  if (r.readiness) {
+    const rd = r.readiness;
+    lines.push(`  AGENT READINESS  ${rd.grade ?? "-"}  (score ${rd.score} \u00b7 annotations ${rd.toolsAnnotated}/${rd.toolCount} tools \u00b7 ${rd.contextTokens.toLocaleString("en-US")} tokens per turn)`);
+  }
+  lines.push(`  ${COVERAGE_NOTE}`);
   for (const line of r.summary ?? []) lines.push(`  ${s(line, 300)}`);
   lines.push("");
   for (const [c, v] of Object.entries(r.scores.categories)) lines.push(`  ${c.padEnd(18)} ${v === null ? "n/a" : String(v).padStart(3)}`);
@@ -91,7 +99,8 @@ export function renderHtml(r: Result): string {
 <style>body{font:15px/1.5 system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%;margin:1rem 0}td{border-top:1px solid #ddd;padding:.5rem;vertical-align:top}.grade{font-size:3rem;font-weight:700}.fail td:first-child{font-weight:600}code{font-size:13px}</style></head><body>
 <h1>Saktum Check report</h1>
 <p>${e(r.target.description)} &middot; ${e(r.target.serverInfo?.["name"] ?? "")} ${e(r.target.serverInfo?.["version"] ?? "")} &middot; ${r.target.toolCount ?? 0} tools</p>
-<p class="grade">Grade ${e(r.grade ?? "-")}</p>
+<p class="grade">Trust ${e(r.grade ?? "-")}${r.readiness ? ` &middot; Agent readiness ${e(r.readiness.grade ?? "-")}` : ""}</p>
+<p><small>${e(COVERAGE_NOTE)}</small></p>
 ${(r.summary ?? []).map((l) => `<p>${e(l)}</p>`).join("")}
 <table>${rows}</table>
 <h2>OWASP MCP Top 10 coverage</h2><table>${cov}</table>

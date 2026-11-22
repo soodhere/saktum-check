@@ -96,7 +96,7 @@ describe("reports", () => {
   it("lead with the grade and summary and show OWASP MCP Top 10 coverage", async () => {
     const r = await runTrustCheck(fixture("malicious"), { packs });
     const text = renderTerminal(r);
-    expect(text.indexOf("GRADE")).toBeLessThan(text.indexOf("FAIL"));
+    expect(text.indexOf("TRUST")).toBeLessThan(text.indexOf("FAIL"));
     expect(text).toContain("OWASP MCP Top 10 coverage");
     const cov = owaspCoverage(r);
     expect(cov.find((c) => c.id === "MCP03")!.failed).toBeGreaterThan(0);
@@ -201,5 +201,41 @@ describe("doctor on Windows (from the first Windows test run)", () => {
   it("quotes only when needed", () => {
     expect(quoteWin("@modelcontextprotocol/server-memory")).toBe("@modelcontextprotocol/server-memory");
     expect(quoteWin("a b")).toBe('"a b"');
+  });
+});
+
+import { readinessFor, READINESS } from "@saktum/testkit-core";
+describe("v0.1.4: agent readiness, a second grade beside trust", () => {
+  const tool = (name: string, opts: { annotated?: boolean; description?: string; pad?: number } = {}) => ({
+    name, description: (opts.description ?? `Do ${name} for the user; read-only lookup, safe to call.`) + "x".repeat(opts.pad ?? 0),
+    inputSchema: { type: "object", properties: {} }, ...(opts.annotated === false ? {} : { annotations: { readOnlyHint: true } })
+  });
+  it("gives a well-annotated, well-described, compact server an A", () => {
+    const r = readinessFor([tool("a"), tool("b"), tool("c")])!;
+    expect(r.grade).toBe("A");
+    expect(r.topImprovement).toBeUndefined();
+  });
+  it("gives a server with no annotations a C, and says what to fix", () => {
+    const r = readinessFor([tool("a", { annotated: false }), tool("b", { annotated: false })])!;
+    expect(r.score).toBe(70);
+    expect(r.grade).toBe("C");
+    expect(r.topImprovement).toMatch(/declare danger annotations .* on 2 of 2 tools/);
+  });
+  it("lowers readiness for very large tool definitions (context cost)", () => {
+    const big = Array.from({ length: 40 }, (_, i) => tool(`t${i}`, { pad: 8_000 })); // about 82,000 tokens
+    const r = readinessFor(big)!;
+    expect(r.contextTokens).toBeGreaterThan(READINESS.zeroCreditTokens);
+    expect(r.grade).toBe("C");
+    expect(r.topImprovement).toMatch(/trim tool definitions/);
+  });
+  it("is absent when there are no tools", () => { expect(readinessFor([])).toBeNull(); });
+  it("never changes the trust grade, and both appear in the report with the coverage note", async () => {
+    const r = await runTrustCheck(fixture("good"), { packs });
+    expect(r.readiness?.grade).toBeDefined();
+    expect(r.coverage?.trustChecksRun).toBeGreaterThanOrEqual(5);
+    const text = renderTerminal(r);
+    expect(text).toMatch(/TRUST {12}A/);
+    expect(text).toMatch(/AGENT READINESS {2}[A-F]/);
+    expect(text).toMatch(/v0\.1 tests conformance, sign-in basics and security hygiene/);
   });
 });

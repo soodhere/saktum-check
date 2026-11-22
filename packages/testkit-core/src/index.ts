@@ -11,3 +11,4 @@ export * from "./auth.js";
 export * from "./leakage.js";
 export * from "./perf.js";
 export * from "./embedded.js";
+export * from "./readiness.js";

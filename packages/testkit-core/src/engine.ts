@@ -2,12 +2,13 @@ import { canonicalize, sha256Tag } from "@saktum/sign";
 import { connect, describeTarget, probeInitialize, processUsage, ShapeError, type CallOutcome, type Session, type Target, type ToolDef } from "@saktum/transports";
 import { contextCost, needsOf, type AnalyserContext } from "./analysers.js";
 import { gradeFor, summarise } from "./grade.js";
+import { readinessFor } from "./readiness.js";
 import { checkNeedsSession, runCheck, SIGN_IN_HINT } from "./runner.js";
 import { sanitizeText } from "./safe.js";
-import { score } from "./scoring.js";
+import { score, TRUST_WEIGHTS } from "./scoring.js";
 import type { Finding, LoadedPack, Result } from "./types.js";
 
-export const ENGINE_VERSION = "0.1.3";
+export const ENGINE_VERSION = "0.1.4";
 export const UNKNOWN_TOOL = "saktum_trust_check_no_such_tool";
 const INVALID_TOKEN = "saktum-check-deliberately-invalid-token";
 const BURST_REQUESTS = 20;
@@ -36,11 +37,11 @@ const baseOf = (pack: LoadedPack["pack"], check: LoadedPack["pack"]["checks"][nu
 /** Minimum number of scored checks that must actually run (pass or fail) before a grade is given. */
 export const MIN_GRADED_CHECKS = 5;
 
-function finish(target: Target, opts: RunOptions, startedAt: Date, findings: Finding[], extra: Partial<Result["target"]>, metrics: Result["metrics"], sandbox: "none" | "docker", noGrade: NoGrade | undefined): Result {
+function finish(target: Target, opts: RunOptions, startedAt: Date, findings: Finding[], extra: Partial<Result["target"]>, metrics: Result["metrics"], sandbox: "none" | "docker", noGrade: NoGrade | undefined, readiness: Result["readiness"] = null): Result {
   const categoryOf = (id: string) => opts.packs.find((p) => p.pack.id === id)?.pack.category ?? "other";
   const scores = score(findings, categoryOf);
   // A grade must never overstate what was examined: withhold it when the tools could not be assessed.
-  const ran = findings.filter((f) => f.scored && (f.status === "pass" || f.status === "fail")).length;
+  const ran = findings.filter((f) => f.scored && (f.status === "pass" || f.status === "fail") && categoryOf(f.pack) in TRUST_WEIGHTS).length;
   const reason: NoGrade | undefined = noGrade ?? (ran < MIN_GRADED_CHECKS ? { kind: "too-few" } : undefined);
   const grade = reason ? null : gradeFor(scores.overall, scores.capped);
   const r: Result = {
@@ -48,10 +49,10 @@ function finish(target: Target, opts: RunOptions, startedAt: Date, findings: Fin
     tool: { name: "saktum-trust-check", version: ENGINE_VERSION },
     target: { transport: target.kind, description: describeTarget(target), ...extra },
     packs: opts.packs.map((p) => ({ id: p.pack.id, version: p.pack.version, hash: p.hash })),
-    findings, scores, grade, assuranceLevel: "L1", metrics,
+    findings, scores, grade, assuranceLevel: "L1", metrics, readiness, coverage: { trustChecksRun: ran },
     run: { startedAt: startedAt.toISOString(), durationMs: Date.now() - startedAt.getTime(), mode: opts.mode ?? "passive", runner: "self", sandbox }
   };
-  r.summary = summarise(r, reason);
+  r.summary = summarise(r, reason, (f) => categoryOf(f.pack) in TRUST_WEIGHTS);
   return r;
 }
 
@@ -152,7 +153,7 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
       : undefined;
     return finish(target, { ...opts, mode }, startedAt, findings,
       session ? { protocolVersion: session.protocolVersion, serverInfo: session.serverInfo, toolsFingerprint: fingerprint, toolCount: tools.length } : { toolCount: 0 },
-      metrics, session?.sandbox ?? "none", noGrade);
+      metrics, session?.sandbox ?? "none", noGrade, session && !listError ? readinessFor(tools) : null);
   } finally {
     if (session && !opts.session) await session.close();
   }

@@ -58,3 +58,42 @@ Run with the beta file (saktum.mjs) in passive mode against public MCP servers f
 | tavily | A | 5 | 1,923 | ax.annotations, conf.tools.unknown-error-code |
 
 Remote (HTTP) sign-in checks were validated against the OAuth fixtures only: this environment cannot reach remote MCP servers. Run a few real remote servers, with and without a token, before the beta.
+
+
+## v0.1.4 re-run: trust and agent readiness (22 Nov 2026)
+
+v0.1.4 adds a second grade, **agent readiness** (annotations 30%, descriptions 40%, context cost 30%, with partial credit; full credit for context cost up to 10,000 tokens per turn, falling to zero at 60,000), and shows coverage beside the trust grade. Re-run on 28 servers that started (three others needed network or downloads unavailable in this environment that day).
+
+- **Trust:** 25 A, 2 B, 1 withheld (no tools without valid credentials). v0.1 trust checks are hygiene checks; well-maintained servers rightly pass them, and the report now says what v0.1 covers.
+- **Agent readiness:** 15 A, 12 C. Every C is either a server that declares no danger annotations at all, or one whose tool definitions cost about 69,000 tokens per turn. Each gets one concrete improvement. Partial credit is fairer than the old pass/fail check: a server annotating 22 of 23 tools now scores 99 instead of failing.
+
+| Server | Trust | Agent readiness | Annotated tools | Context tokens | Top improvement |
+| --- | --- | --- | --- | --- | --- |
+| aws-kb-archived | A | C (70) | 0/1 | 117 | declare danger annotations (readOnlyHint, destructiveHint) on 1 of 1 tools |
+| brave-archived | A | C (70) | 0/2 | 362 | declare danger annotations (readOnlyHint, destructiveHint) on 2 of 2 tools |
+| context7 | A | A (100) | 2/2 | 1,304 | none |
+| elasticsearch | A | C (70) | 0/4 | 445 | declare danger annotations (readOnlyHint, destructiveHint) on 4 of 4 tools |
+| everart-archived | A | C (70) | 0/1 | 223 | declare danger annotations (readOnlyHint, destructiveHint) on 1 of 1 tools |
+| everything | A | A (100) | 13/13 | 1,910 | none |
+| exa | A | A (100) | 2/2 | 534 | none |
+| figma | A | A (100) | 2/2 | 973 | none |
+| filesystem | A | A (100) | 14/14 | 3,275 | none |
+| firecrawl | A | A (92) | 28/28 | 22,831 | trim tool definitions: agents read 22,831 tokens of them on every turn |
+| github-archived | A | C (70) | 0/26 | 3,960 | declare danger annotations (readOnlyHint, destructiveHint) on 26 of 26 tools |
+| gitlab-archived | B | C (70) | 0/9 | 355 | declare danger annotations (readOnlyHint, destructiveHint) on 9 of 9 tools |
+| heroku | A | C (70) | 0/33 | 5,606 | declare danger annotations (readOnlyHint, destructiveHint) on 33 of 33 tools |
+| hubspot | A | A (100) | 21/21 | 10,058 | none |
+| kubernetes | A | A (99) | 22/23 | 5,963 | declare danger annotations (readOnlyHint, destructiveHint) on 1 of 23 tools |
+| memory | A | A (100) | 9/9 | 2,766 | none |
+| notion | A | A (95) | 24/24 | 19,051 | trim tool definitions: agents read 19,051 tokens of them on every turn |
+| playwright | A | A (95) | 25/25 | 5,069 | write usable descriptions for 3 of 25 tools |
+| postgres-archived | A | C (70) | 0/1 | 32 | declare danger annotations (readOnlyHint, destructiveHint) on 1 of 1 tools |
+| py-awsdocs | A | C (70) | 0/5 | 5,809 | declare danger annotations (readOnlyHint, destructiveHint) on 5 of 5 tools |
+| py-fetch | A | A (100) | 1/1 | 362 | none |
+| py-git | A | A (94) | 14/14 | 1,926 | write usable descriptions for 2 of 14 tools |
+| py-time | A | A (100) | 3/3 | 1,072 | none |
+| sentry | A | C (70) | 74/74 | 68,975 | trim tool definitions: agents read 68,975 tokens of them on every turn |
+| seq-thinking | A | A (100) | 1/1 | 1,160 | none |
+| slack-archived | B | C (70) | 0/8 | 777 | declare danger annotations (readOnlyHint, destructiveHint) on 8 of 8 tools |
+| supabase | no grade | - | - | - | none |
+| tavily | A | C (70) | 0/5 | 1,923 | declare danger annotations (readOnlyHint, destructiveHint) on 5 of 5 tools |

@@ -26,6 +26,10 @@ export interface Result {
   findings: Finding[];
   scores: { overall: number | null; capped: boolean; categories: Record<string, number | null> };
   grade?: "A" | "B" | "C" | "D" | "F" | null;
+  /** Agent readiness (v0.1.4): a second grade, never mixed into trust. Null when no tools could be examined. */
+  readiness?: { score: number; grade: "A" | "B" | "C" | "D" | "F" | null; toolsAnnotated: number; toolsDescribed: number; toolCount: number; contextTokens: number; topImprovement?: string } | null;
+  /** How many scored trust checks (conformance, sign-in, security) actually ran in this run. */
+  coverage?: { trustChecksRun: number };
   summary?: string[];
   assuranceLevel?: "L1";
   metrics: {

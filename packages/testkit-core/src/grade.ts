@@ -13,10 +13,12 @@ export function gradeFor(overall: number | null, capped: boolean): Result["grade
   return "D";
 }
 
-export function summarise(r: Pick<Result, "findings" | "scores" | "metrics" | "grade">, noGrade?: NoGrade): string[] {
+/** isTrust selects the findings that belong to the trust grade (conformance, sign-in, security); default: all. */
+export function summarise(r: Pick<Result, "findings" | "scores" | "metrics" | "grade"> & Partial<Pick<Result, "readiness">>, noGrade?: NoGrade, isTrust: (f: Result["findings"][number]) => boolean = () => true): string[] {
   const signInRequired = noGrade?.kind === "sign-in";
-  const fails = r.findings.filter((f) => f.status === "fail" && f.scored).sort((a, b) => ORDER.indexOf(a.severity) - ORDER.indexOf(b.severity));
-  const passed = r.findings.filter((f) => f.status === "pass").length;
+  const trust = r.findings.filter(isTrust);
+  const fails = trust.filter((f) => f.status === "fail" && f.scored).sort((a, b) => ORDER.indexOf(a.severity) - ORDER.indexOf(b.severity));
+  const passed = trust.filter((f) => f.status === "pass" && f.scored).length;
   const counts = ORDER.slice(0, 4).map((s) => [s, fails.filter((f) => f.severity === s).length] as const).filter(([, n]) => n > 0);
   const lines: string[] = [];
   if (signInRequired) lines.push(`No grade yet: the sign-in checks ran${fails.length ? ` and found ${fails.length} problem${fails.length === 1 ? "" : "s"}` : " and passed"}, but the tools need a token to be tested.`);
@@ -25,14 +27,18 @@ export function summarise(r: Pick<Result, "findings" | "scores" | "metrics" | "g
     ? "No grade: the server listed no tools, so there was nothing to examine. It may need valid credentials or configuration before it offers tools."
     : "No grade: this server offers no tools (only resources or prompts), which this version does not grade yet.");
   else if (r.grade === null || r.grade === undefined) lines.push("No grade: too few checks could run against this server to grade it fairly.");
-  else if (fails.length === 0) lines.push(`Grade ${r.grade}: all ${passed} checks that apply passed.`);
-  else lines.push(`Grade ${r.grade}: ${fails.length} problem${fails.length === 1 ? "" : "s"} found (${counts.map(([s, n]) => `${n} ${s}`).join(", ")}); ${passed} checks passed.`);
+  else if (fails.length === 0) lines.push(`Trust grade ${r.grade}: all ${passed} checks that apply passed.`);
+  else lines.push(`Trust grade ${r.grade}: ${fails.length} problem${fails.length === 1 ? "" : "s"} found (${counts.map(([s, n]) => `${n} ${s}`).join(", ")}); ${passed} checks passed.`);
+  const rd = r.readiness;
+  const readinessLine = rd && rd.grade && rd.topImprovement ? `Agent readiness ${rd.grade}: ${rd.topImprovement}.` : undefined;
   if (fails[0]) {
     const first = (fails[0].message ?? fails[0].title).split(/(?<=\.)\s/)[0]!.replace(/\.$/, "");
     lines.push(`Fix first (${fails[0].severity}): ${first.charAt(0).toLowerCase()}${first.slice(1)}.`);
   }
+  else if (readinessLine) lines.push(readinessLine);
   else lines.push("Nothing to fix in this run; keep running it in CI to catch regressions.");
   if (signInRequired) lines.push("Most checks need sign-in: re-run with --header \"Authorization: Bearer <token>\" to test the tools themselves.");
+  else if (readinessLine && fails[0]) lines.push(readinessLine);
   else if (r.metrics.contextCostTokens !== undefined) {
     const money = r.metrics.contextCostPer1kTurnsUsd !== undefined ? `, about $${r.metrics.contextCostPer1kTurnsUsd.toFixed(2)} per 1,000 turns` : "";
     lines.push(`Agents spend about ${r.metrics.contextCostTokens.toLocaleString("en-US")} tokens reading these tools on every turn${money}.`);

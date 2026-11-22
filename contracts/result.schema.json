@@ -303,6 +303,73 @@
         "L4"
       ],
       "description": "L1 self-tested (Saktum Check); L2 independently tested; L3 certified; L4 continuously certified."
+    },
+    "readiness": {
+      "description": "Agent readiness: a second grade beside trust (annotations, descriptions, context cost), never mixed into the trust score.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "grade",
+            "toolsAnnotated",
+            "toolsDescribed",
+            "toolCount",
+            "contextTokens"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "grade": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "F",
+                null
+              ]
+            },
+            "toolsAnnotated": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toolsDescribed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toolCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "contextTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "topImprovement": {
+              "type": "string",
+              "maxLength": 300
+            }
+          }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trustChecksRun": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   },
   "$defs": {

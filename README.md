@@ -1,8 +1,8 @@
 # Saktum Check
 
 **Test your MCP server in one command:** conformance, sign-in, security mapped to the **OWASP MCP Top 10**, agent
-experience, what your tools cost an agent in context, and performance. A grade, plain findings, a fix for each, and a
-signed result anyone can verify.
+experience, what your tools cost an agent in context, and performance. Two grades (**trust** and **agent readiness**),
+plain findings, a fix for each, and a signed result anyone can verify.
 
 ```
 npx saktum check -- npx -y @your/mcp-server          # a local server
@@ -32,7 +32,9 @@ Runs on your machine. Nothing is uploaded. Your own environment variables are ne
     Evidence:     at handleCall (/home/deploy/acme-mcp/src/handlers.js:42:11)
 ```
 
-Every report ends with **OWASP MCP Top 10 coverage**: which categories this run tested and which come in later releases.
+**Two grades.** *Trust* covers conformance, sign-in and security; *agent readiness* covers whether agents can choose and
+use your tools safely and cheaply (danger annotations, descriptions, context cost). Readiness never changes the trust
+grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories this run tested and which come later.
 
 ## What it checks (v0.1: 24 checks)
 
