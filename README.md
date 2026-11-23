@@ -59,13 +59,14 @@ grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories th
 | `saktum snapshot -- <server>` | Writes `saktum.lock.json`, a lock file of your tools |
 | `saktum diff saktum.lock.json -- <server>` | Breaking changes (removed tools, new required fields, changed types), changes to review (descriptions, annotations: silent tool changes), additions, and the version bump they need; fails CI on breaking or risky changes |
 | `saktum docs -- <server>` | A Markdown tools table and ready-to-paste configuration for Claude Desktop, Cursor and VS Code |
+| `saktum allowlist reports/*.json` | An allowlist for MCP firewalls and gateways: only servers meeting your grades, each pinned to the exact tools that were checked (signatures verified first) |
 | `saktum packet saktum-report.json` | A printable **security packet** for customers' security reviews, built from a verified signed result, with a section for your own statements (clearly marked as not verified) |
 
 ## In CI (GitHub Action)
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.3.1
+- uses: soodhere/saktum-check@v0.3.2
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

@@ -165,3 +165,29 @@ export function clientCompatibility(tools: ToolDef[]): string[] {
   if (tools.length > 40) issues.push(`${tools.length} tools: some clients limit how many tools they load or show; check your target clients and consider grouping or splitting the server`);
   return issues;
 }
+
+// ---------- saktum allowlist: evidence-based allowlists for MCP firewalls and gateways ----------
+
+const GRADES = ["A", "B", "C", "D", "F"];
+const atLeast = (g: string | null | undefined, min: string) => g != null && GRADES.indexOf(g) <= GRADES.indexOf(min);
+
+export interface AllowlistEntry { server: string; version?: string; transport: string; target: string; toolsFingerprint?: string; toolCount?: number; trustGrade: string | null; readinessGrade: string | null; checkedAt: string; checkedWith: string; signedBy?: string }
+export interface Allowlist { allowlistFormat: "0.1"; generatedAt: string; criteria: { minTrust: string; minReadiness: string; noFailedCritical: boolean }; allowed: AllowlistEntry[]; excluded: { server: string; reason: string }[]; note: string }
+
+/** Keep the checked servers that meet the criteria, pinned to the exact tool fingerprint that was checked. */
+export function buildAllowlist(results: { result: { target: { description: string; transport: string; serverInfo?: Record<string, unknown>; toolsFingerprint?: string; toolCount?: number }; grade?: string | null; readiness?: { grade: string | null } | null; findings: { severity: string; status: string; suppressed?: unknown }[]; run: { startedAt: string }; tool: { version: string } }; signedBy?: string }[], criteria: Allowlist["criteria"]): Allowlist {
+  const allowed: AllowlistEntry[] = [], excluded: Allowlist["excluded"] = [];
+  for (const { result: r, signedBy } of results) {
+    const server = String(r.target.serverInfo?.["name"] ?? r.target.description);
+    const why: string[] = [];
+    if (!atLeast(r.grade, criteria.minTrust)) why.push(`trust ${r.grade ?? "not graded"} is below ${criteria.minTrust}`);
+    if (!atLeast(r.readiness?.grade, criteria.minReadiness)) why.push(`agent readiness ${r.readiness?.grade ?? "not graded"} is below ${criteria.minReadiness}`);
+    if (criteria.noFailedCritical && r.findings.some((f) => f.severity === "critical" && f.status === "fail" && !f.suppressed)) why.push("a critical check failed");
+    if (!r.target.toolsFingerprint) why.push("no tool fingerprint to pin");
+    if (why.length) { excluded.push({ server, reason: why.join("; ") }); continue; }
+    allowed.push({ server, version: r.target.serverInfo?.["version"] as string | undefined, transport: r.target.transport, target: r.target.description, toolsFingerprint: r.target.toolsFingerprint,
+      toolCount: r.target.toolCount, trustGrade: r.grade ?? null, readinessGrade: r.readiness?.grade ?? null, checkedAt: r.run.startedAt, checkedWith: `Saktum Check ${r.tool.version}`, signedBy });
+  }
+  return { allowlistFormat: "0.1", generatedAt: new Date().toISOString(), criteria, allowed, excluded,
+    note: "Allow each server only while its tools match toolsFingerprint; re-check after any change (saktum diff). Self-tested evidence (assurance L1) unless stated otherwise." };
+}

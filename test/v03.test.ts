@@ -94,3 +94,14 @@ describe("saktum fix: ambiguous verbs (v0.3.1, from a reference server)", () => 
     expect(suggestAnnotations([tool("delete_nodes", { annotations: { readOnlyHint: true } })])[0]!.conflict).toMatch(/declared read-only/);
   });
 });
+
+import { buildAllowlist } from "@saktum/testkit-core";
+describe("saktum allowlist (v0.3.2)", () => {
+  it("allows only servers meeting the criteria, pinned to their tool fingerprint", async () => {
+    const good = await runTrustCheck(fixture("good"), { packs });
+    const malicious = await runTrustCheck(fixture("malicious"), { packs });
+    const list = buildAllowlist([{ result: good }, { result: malicious }], { minTrust: "A", minReadiness: "B", noFailedCritical: true });
+    expect(list.allowed.map((a) => a.toolsFingerprint)).toEqual([good.target.toolsFingerprint]);
+    expect(list.excluded[0]!.reason).toMatch(/trust F is below A; a critical check failed/);
+  });
+});

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { buildAllowlist, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
@@ -158,6 +158,27 @@ export async function main(argv = process.argv): Promise<number> {
       if (!v.valid) throw new Error(`The result's signature is not valid (${v.reason}); a packet must be built from an unaltered signed result.`);
       writeFileSync(o.out, renderPacket(doc, v.kid));
       process.stdout.write(`Wrote ${sanitizeText(o.out)}: open it in a browser and print to PDF. Send it with ${sanitizeText(file)} so customers can verify it.\n`);
+    });
+
+  program.command("allowlist")
+    .description("Build an allowlist for MCP firewalls and gateways from signed results: only servers meeting your criteria, pinned to the tools that were checked")
+    .argument("<results...>", "signed results (saktum-report.json files)")
+    .option("--min-trust <grade>", "minimum trust grade", "A")
+    .option("--min-readiness <grade>", "minimum agent-readiness grade", "B")
+    .option("--allow-critical", "do not exclude servers with a failed critical check", false)
+    .option("--out <file>", "allowlist file", "saktum-allowlist.json")
+    .action((files: string[], o: { minTrust: string; minReadiness: string; allowCritical: boolean; out: string }) => {
+      const inputs = files.map((f) => {
+        const doc = JSON.parse(readFileSync(f, "utf8")) as Result;
+        const v = verifyDocument(doc);
+        if (!v.valid) throw new Error(`${f}: signature not valid (${v.reason}); only unaltered signed results can be allowlisted.`);
+        return { result: doc, signedBy: v.kid };
+      });
+      const list = buildAllowlist(inputs, { minTrust: o.minTrust.toUpperCase(), minReadiness: o.minReadiness.toUpperCase(), noFailedCritical: !o.allowCritical });
+      writeFileSync(o.out, JSON.stringify(list, null, 2) + "\n");
+      for (const a of list.allowed) process.stdout.write(`\u2713 ${sanitizeText(a.server, 60)} ${sanitizeText(a.version ?? "", 20)}  trust ${a.trustGrade} \u00b7 readiness ${a.readinessGrade} \u00b7 ${a.toolCount} tools pinned\n`);
+      for (const x of list.excluded) process.stdout.write(`\u2717 ${sanitizeText(x.server, 60)}: ${sanitizeText(x.reason, 200)}\n`);
+      process.stdout.write(`\nWrote ${sanitizeText(o.out)}: ${list.allowed.length} allowed, ${list.excluded.length} excluded.\n`);
     });
 
   program.command("doctor")
