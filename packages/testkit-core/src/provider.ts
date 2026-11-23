@@ -12,6 +12,9 @@ const words = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLo
 const READ = new Set(["get", "list", "read", "search", "find", "fetch", "query", "describe", "show", "view", "lookup", "count", "check", "status", "retrieve", "browse", "inspect", "resolve", "validate", "analyze", "analyse", "summarize", "summarise", "explain", "compare", "preview", "info", "stats", "download", "export", "diff", "log", "history", "whoami", "ping", "health", "extract", "crawl", "scrape", "research", "map", "summary", "lookup", "tail", "watch"]);
 const DESTROY = new Set(["delete", "remove", "drop", "purge", "destroy", "reset", "revoke", "cancel", "terminate", "kill", "wipe", "truncate", "overwrite", "uninstall", "unpublish", "archive"]);
 const WRITE = new Set(["create", "add", "insert", "update", "set", "put", "patch", "edit", "write", "save", "upload", "send", "post", "publish", "deploy", "run", "execute", "exec", "start", "stop", "restart", "move", "rename", "merge", "commit", "push", "install", "enable", "disable", "assign", "invite", "approve", "pay", "charge", "refund", "transfer", "book", "order", "replace", "import", "sync", "trigger", "schedule", "close", "open", "submit", "apply", "generate", "upsert"]);
+/** Verbs whose effect depends on context (open_file reads; open_pull_request creates): never used for suggestions or
+ *  conflicts, so a correct annotation is never second-guessed. Found on a reference server (open_nodes). */
+const AMBIGUOUS = new Set(["open", "close", "run", "start", "stop", "restart", "generate", "apply", "import", "sync", "trigger", "schedule", "submit", "execute", "exec", "export", "download", "log", "watch", "tail", "map"]);
 const IDEMPOTENT_WRITE = new Set(["set", "put", "update", "upsert", "enable", "disable", "replace"]);
 
 export interface AnnotationSuggestion {
@@ -28,7 +31,7 @@ export function suggestAnnotations(tools: ToolDef[]): AnnotationSuggestion[] {
   const hasCap = (tool: string, c: string) => caps.some((x) => x.capability === c && x.tools.includes(sanitizeText(tool, 60)));
   return tools.map((t) => {
     const w = words(t.name);
-    const verb = w.find((x) => READ.has(x) || DESTROY.has(x) || WRITE.has(x));
+    const verb = w.find((x) => !AMBIGUOUS.has(x) && (READ.has(x) || DESTROY.has(x) || WRITE.has(x)));
     const current = t.annotations && Object.keys(t.annotations).length ? (t.annotations as Record<string, unknown>) : undefined;
     const openWorld = hasCap(t.name, "network") || hasCap(t.name, "untrusted-content") || hasCap(t.name, "sends-messages") ? true : undefined;
     let suggested: AnnotationSuggestion["suggested"];
@@ -56,7 +59,7 @@ export function renderFix(tools: ToolDef[], format: "ts" | "py" | "json" = "ts")
   const conflicts = s.filter((x) => x.conflict);
   const lines: string[] = [];
   lines.push(`Saktum fix: annotation suggestions for ${tools.length} tools (review each before applying; Saktum suggests, you decide).`);
-  lines.push(`${todo.length} to add, ${review.length} need your judgement, ${conflicts.length} possible conflicts, ${s.filter((x) => x.current && !x.conflict).length} already annotated.`);
+  lines.push(`${todo.length} to add, ${review.length} need your judgement, ${conflicts.length} possible conflict${conflicts.length === 1 ? "" : "s"}, ${s.filter((x) => x.current && !x.conflict).length} already annotated.`);
   lines.push("");
   if (format === "py") lines.push("from mcp.types import ToolAnnotations", "");
   for (const x of todo) {

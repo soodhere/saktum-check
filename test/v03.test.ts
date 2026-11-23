@@ -82,3 +82,15 @@ describe("saktum packet", () => {
     expect(html).toMatch(/npx saktum verify/);
   });
 });
+
+describe("saktum fix: ambiguous verbs (v0.3.1, from a reference server)", () => {
+  it("does not second-guess a read-only tool whose name uses an ambiguous verb", () => {
+    const s = suggestAnnotations([tool("open_nodes", { annotations: { readOnlyHint: true } }), tool("run_report"), tool("generate_summary")]);
+    expect(s.find((x) => x.tool === "open_nodes")!.conflict).toBeUndefined();
+    expect(s.find((x) => x.tool === "run_report")!.suggested).toBeUndefined();
+    expect(s.find((x) => x.tool === "generate_summary")!.conflict).toBeUndefined();
+  });
+  it("still raises conflicts for unambiguous verbs", () => {
+    expect(suggestAnnotations([tool("delete_nodes", { annotations: { readOnlyHint: true } })])[0]!.conflict).toMatch(/declared read-only/);
+  });
+});

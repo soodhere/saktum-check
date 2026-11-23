@@ -65,7 +65,7 @@ grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories th
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.3.0
+- uses: soodhere/saktum-check@v0.3.1
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server
