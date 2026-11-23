@@ -4,6 +4,7 @@ import type { CallOutcome, HttpProbe, Session, Target, ToolDef } from "@saktum/t
 import { sha256Tag } from "@saktum/sign";
 import { compileUntrustedSchema } from "./contracts.js";
 import { INVISIBLE, sanitizeText } from "./safe.js";
+import { clientCompatibility } from "./provider.js";
 import { authAnalysers, AUTH_NEEDS } from "./auth.js";
 import { leakageAnalysers, LEAKAGE_NEEDS } from "./leakage.js";
 import { perfAnalysers, PERF_NEEDS } from "./perf.js";
@@ -20,7 +21,7 @@ export interface AnalyserContext {
   target?: Target;
   mode?: "passive" | "active";
   /** Raw HTTP answers to initialize: without credentials, and with a deliberately invalid bearer token. */
-  http?: { unauthenticated?: HttpProbe; invalidToken?: HttpProbe; userSuppliedAuth: boolean };
+  http?: { unauthenticated?: HttpProbe; invalidToken?: HttpProbe; foreignOrigin?: HttpProbe; userSuppliedAuth: boolean };
   /** Responses to safe probe calls, shared by several checks. */
   probes?: { unknownTool?: CallOutcome; invalidArgs?: { tool: string; outcome: CallOutcome } };
   perf?: { initMs?: number; listMs?: number; listBytes?: number; rssMb?: number; cpuPct?: number; burst?: { requests: number; ok: number; rateLimited: number; errors: number; p95Ms: number } };
@@ -49,14 +50,24 @@ const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/;
 /** Conservative patterns of instructions aimed at the agent; tuned for few false positives (see corpus results). */
 const HIDDEN_INSTRUCTION = [
   /ignore (all |any )?(previous|prior|above) (instructions|messages)/i,
-  /do not (tell|mention|inform|reveal to) the user/i,
+  // Concealment, not guidance: honest advice such as "do not tell the user it is in their account" must not match.
+  /\b(do not|don['’]t|never) tell the user\s*[.!]/i,
+  /\bwithout (telling|informing|alerting|notifying) the user\b/i,
+  /\b(do not|don['’]t|never) (mention|reveal|disclose) (this|these) (instructions?|steps?|tool|call)\b/i,
+  /\bhide (this|it|the (action|request|call|upload)) from the user\b/i,
   /<\s*important\s*>/i,
-  /\b(system prompt|developer message)\b/i,
+  // Manipulating the agent's instructions, not merely mentioning a system prompt (for example a parameter that appends to one).
+  /\b(ignore|disregard|override|forget|replace) (the |your |all )?(system prompt|developer message|previous instructions)\b/i,
+  /\b(reveal|print|output|leak|show) (the |your )?(system prompt|developer message)\b/i,
   /before using this tool,? (you must |first )?(read|send|call|fetch|upload)/i,
   /(send|upload|post|forward) (the |all |any )?(conversation|chat history|credentials|api keys?|secrets?|tokens?) to/i
 ];
 
 const coreAnalysers: Record<string, Analyser> = {
+  "client-compat": ({ tools }) => {
+    const issues = clientCompatibility(tools);
+    return issues.length ? { status: "info", message: issues.join(" ") } : { status: "pass", message: "Tool names and count fit the constraints common to model providers and clients." };
+  },
   "unknown-tool-code": ({ probes }) => {
     const o = probes?.unknownTool;
     if (!o) return { status: "inconclusive", message: "The unknown-tool probe did not run." };

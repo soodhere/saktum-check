@@ -42,4 +42,12 @@ checks:
     fix: Return short, actionable error messages; log stack traces, file paths and database errors on the server only.
     references: ["OWASP MCP Top 10: MCP08 Lack of Audit and Telemetry (errors leak internals)", "CWE-209"]
     normative: [{ source: "OWASP MCP Top 10", clause: "Information exposure through errors", level: best-practice }]
-
+  - id: sec.http.origin
+    title: Local HTTP servers refuse requests from foreign web origins
+    severity: high
+    safety: passive
+    appliesTo: { transports: [streamable-http] }
+    steps: [{ action: analyse, analyser: origin-validation }]
+    fix: Validate the Origin header on every request and refuse origins you do not expect (HTTP 403); bind local servers to 127.0.0.1, not all interfaces.
+    references: ["MCP specification: transports, security warning (DNS rebinding)", "CWE-346", "OWASP MCP Top 10: MCP07 Insufficient Authentication and Authorization"]
+    normative: [{ source: "MCP specification", version: "verify-latest", clause: "Transports: Streamable HTTP security warning, validate the Origin header", level: MUST }]

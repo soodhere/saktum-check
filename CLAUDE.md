@@ -113,3 +113,9 @@ lethal-trifecta warning; trust card and scope of run in every report; `saktum ch
 reasons; `--badge`. Safety: tools are called only with --active, only read-only tools unless named with --call or in a
 test case; destructive tools never automatically. 94 tests; validated passive on 30 servers and active on 7 with no
 false failures (docs/VALIDATION.md). Keep capability inference conservative: any new rule must be re-reviewed on the corpus.
+
+## v0.3.0 (23 Nov 2026): the provider toolkit
+fix (annotation suggestions as TS/Python code, conflicts), snapshot/diff (tool lock file, breaking and risky changes,
+semver advice, CI exit code), docs (tools table, client configuration), packet (security packet from a verified signed
+result; provider statements marked unverified), sec.http.origin (local HTTP servers must refuse foreign origins: DNS
+rebinding), ax.client-compat (informational), negotiated protocol version recorded. 108 tests.

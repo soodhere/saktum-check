@@ -51,13 +51,41 @@ grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories th
   `npx saktum checks` lists every check with the standard behind it ([docs/CHECKS.md](docs/CHECKS.md)).
 - **Control:** `--ignore check.id="reason"` (shown in the report, not scored) and `--badge badge.svg` for your README.
 
+## The provider toolkit
+
+| Command | What it does |
+| --- | --- |
+| `saktum fix -- <server>` | Suggests danger annotations for every tool, as code to paste (`--format ts` or `py`), and flags annotations that contradict a tool's name |
+| `saktum snapshot -- <server>` | Writes `saktum.lock.json`, a lock file of your tools |
+| `saktum diff saktum.lock.json -- <server>` | Breaking changes (removed tools, new required fields, changed types), changes to review (descriptions, annotations: silent tool changes), additions, and the version bump they need; fails CI on breaking or risky changes |
+| `saktum docs -- <server>` | A Markdown tools table and ready-to-paste configuration for Claude Desktop, Cursor and VS Code |
+| `saktum packet saktum-report.json` | A printable **security packet** for customers' security reviews, built from a verified signed result, with a section for your own statements (clearly marked as not verified) |
+
+## In CI (GitHub Action)
+
+```yaml
+- uses: actions/checkout@v4
+- uses: soodhere/saktum-check@v0.3.0
+  with:
+    target: "-- node build/index.js"     # or an https URL
+    args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server
+    fail-on: high
+```
+
+The report appears in the job summary; the signed result, HTML report and badge are saved as an artifact.
+
+## Test vectors for the MCP community
+
+[`test-vectors/`](test-vectors/) holds known-good and known-bad servers with the expected verdict for every check, so any
+MCP testing tool can validate itself against the same cases. Contributions welcome.
+
 ## What it checks
 
 | Area | Checks |
 | --- | --- |
 | Conformance | Handshake, tool list, valid input schemas (draft-07, 2019-09, 2020-12), tool names, unknown-tool handling |
 | Sign-in (remote servers) | HTTPS; 401 with a Bearer challenge pointing to resource metadata (RFC 9728); protected resource metadata; authorization server metadata with PKCE S256 (RFC 8414, RFC 7636); invalid tokens rejected (RFC 6750) |
-| Security | Hidden instructions to the agent, invisible and bidirectional characters, terminal escape sequences, secrets in tools or errors (always redacted), stack traces and source paths in errors |
+| Security | Hidden instructions to the agent, invisible and bidirectional characters, terminal escape sequences, secrets in tools or errors (always redacted), stack traces and source paths in errors, Origin validation for local HTTP servers (DNS rebinding) |
 | Agent experience | Danger annotations, description quality, context cost in tokens and dollars |
 | Functional (`--active` or test cases) | Tools respond to valid arguments; results well-formed and matching their `outputSchema`; invalid arguments rejected gracefully; the server survives |
 | Performance (never scored) | Start-up, latency percentiles, behaviour at 1, 5 and 20 concurrent callers, memory of the whole process tree |

@@ -1,0 +1,165 @@
+{
+  "generatedBy": "Saktum Check",
+  "note": "Expected verdicts per fixture and check. pass/fail are normative for these fixtures; info and skipped are informational.",
+  "vectors": [
+    {
+      "fixture": "fixtures/src/good.ts",
+      "mode": "passive",
+      "trustGrade": "A",
+      "readinessGrade": "A",
+      "verdicts": {
+        "ax.annotations": "pass",
+        "ax.short-descriptions": "pass",
+        "ax.client-compat": "pass",
+        "conf.init.handshake": "pass",
+        "conf.tools.list": "pass",
+        "conf.tools.schema-valid": "pass",
+        "conf.tools.names": "pass",
+        "conf.tools.unknown-not-success": "pass",
+        "conf.tools.unknown-error-code": "pass",
+        "sec.description.hidden-instructions": "pass",
+        "sec.description.invisible-text": "pass",
+        "sec.description.control-characters": "pass",
+        "sec.secrets.exposed": "pass",
+        "sec.errors.leakage": "pass"
+      }
+    },
+    {
+      "fixture": "fixtures/src/good.ts",
+      "mode": "active",
+      "trustGrade": "A",
+      "readinessGrade": "A",
+      "verdicts": {
+        "ax.annotations": "pass",
+        "ax.short-descriptions": "pass",
+        "ax.client-compat": "pass",
+        "conf.init.handshake": "pass",
+        "conf.tools.list": "pass",
+        "conf.tools.schema-valid": "pass",
+        "conf.tools.names": "pass",
+        "conf.tools.unknown-not-success": "pass",
+        "conf.tools.unknown-error-code": "pass",
+        "func.tools.respond": "pass",
+        "func.output.valid": "pass",
+        "func.errors.graceful": "pass",
+        "func.server.survives": "pass",
+        "sec.description.hidden-instructions": "pass",
+        "sec.description.invisible-text": "pass",
+        "sec.description.control-characters": "pass",
+        "sec.secrets.exposed": "pass",
+        "sec.errors.leakage": "pass"
+      }
+    },
+    {
+      "fixture": "fixtures/src/broken.ts",
+      "mode": "passive",
+      "trustGrade": "C",
+      "readinessGrade": "F",
+      "verdicts": {
+        "ax.annotations": "fail",
+        "ax.short-descriptions": "fail",
+        "conf.init.handshake": "pass",
+        "conf.tools.list": "pass",
+        "conf.tools.schema-valid": "fail",
+        "conf.tools.names": "fail",
+        "conf.tools.unknown-not-success": "fail",
+        "sec.description.hidden-instructions": "pass",
+        "sec.description.invisible-text": "pass",
+        "sec.description.control-characters": "pass",
+        "sec.secrets.exposed": "pass",
+        "sec.errors.leakage": "pass"
+      }
+    },
+    {
+      "fixture": "fixtures/src/malicious.ts",
+      "mode": "passive",
+      "trustGrade": "F",
+      "readinessGrade": "A",
+      "verdicts": {
+        "ax.annotations": "pass",
+        "ax.short-descriptions": "pass",
+        "ax.client-compat": "pass",
+        "conf.init.handshake": "pass",
+        "conf.tools.list": "pass",
+        "conf.tools.schema-valid": "pass",
+        "conf.tools.names": "pass",
+        "conf.tools.unknown-not-success": "pass",
+        "conf.tools.unknown-error-code": "pass",
+        "sec.description.hidden-instructions": "fail",
+        "sec.description.invisible-text": "fail",
+        "sec.description.control-characters": "fail",
+        "sec.secrets.exposed": "pass",
+        "sec.errors.leakage": "pass"
+      }
+    },
+    {
+      "fixture": "fixtures/src/leaky.ts",
+      "mode": "passive",
+      "trustGrade": "F",
+      "readinessGrade": "A",
+      "verdicts": {
+        "ax.annotations": "pass",
+        "ax.short-descriptions": "pass",
+        "ax.client-compat": "pass",
+        "conf.init.handshake": "pass",
+        "conf.tools.list": "pass",
+        "conf.tools.schema-valid": "pass",
+        "conf.tools.names": "pass",
+        "conf.tools.unknown-not-success": "pass",
+        "conf.tools.unknown-error-code": "pass",
+        "sec.description.hidden-instructions": "pass",
+        "sec.description.invisible-text": "pass",
+        "sec.description.control-characters": "pass",
+        "sec.secrets.exposed": "fail",
+        "sec.errors.leakage": "fail"
+      }
+    },
+    {
+      "fixture": "fixtures/src/faulty.ts",
+      "mode": "active",
+      "trustGrade": "A",
+      "readinessGrade": "A",
+      "verdicts": {
+        "ax.annotations": "pass",
+        "ax.short-descriptions": "pass",
+        "ax.client-compat": "pass",
+        "conf.init.handshake": "pass",
+        "conf.tools.list": "pass",
+        "conf.tools.schema-valid": "pass",
+        "conf.tools.names": "pass",
+        "conf.tools.unknown-error-code": "pass",
+        "func.tools.respond": "fail",
+        "func.output.valid": "fail",
+        "func.errors.graceful": "fail",
+        "func.server.survives": "fail",
+        "sec.description.hidden-instructions": "pass",
+        "sec.description.invisible-text": "pass",
+        "sec.description.control-characters": "pass",
+        "sec.secrets.exposed": "pass",
+        "sec.errors.leakage": "pass"
+      }
+    },
+    {
+      "fixture": "fixtures/src/empty.ts",
+      "mode": "passive",
+      "trustGrade": null,
+      "readinessGrade": null,
+      "verdicts": {
+        "ax.annotations": "pass",
+        "ax.short-descriptions": "pass",
+        "ax.client-compat": "pass",
+        "conf.init.handshake": "pass",
+        "conf.tools.list": "pass",
+        "conf.tools.schema-valid": "pass",
+        "conf.tools.names": "pass",
+        "conf.tools.unknown-not-success": "pass",
+        "conf.tools.unknown-error-code": "pass",
+        "sec.description.hidden-instructions": "pass",
+        "sec.description.invisible-text": "pass",
+        "sec.description.control-characters": "pass",
+        "sec.secrets.exposed": "pass",
+        "sec.errors.leakage": "pass"
+      }
+    }
+  ]
+}

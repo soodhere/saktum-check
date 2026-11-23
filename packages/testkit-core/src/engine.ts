@@ -11,7 +11,7 @@ import { sanitizeText } from "./safe.js";
 import { score, TRUST_WEIGHTS } from "./scoring.js";
 import type { Finding, LoadedPack, Result } from "./types.js";
 
-export const ENGINE_VERSION = "0.2.0";
+export const ENGINE_VERSION = "0.3.0";
 export const UNKNOWN_TOOL = "saktum_trust_check_no_such_tool";
 const INVALID_TOKEN = "saktum-check-deliberately-invalid-token";
 
@@ -94,7 +94,9 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
     const userSuppliedAuth = Object.keys(target.headers ?? {}).some((k) => k.toLowerCase() === "authorization");
     const unauthenticated = await probeInitialize(target.url);
     const invalidToken = await probeInitialize(target.url, { Authorization: `Bearer ${INVALID_TOKEN}` });
-    ctx.http = { unauthenticated, invalidToken, userSuppliedAuth };
+    // DNS-rebinding defence: a request claiming to come from an unrelated web page must be refused.
+    const foreignOrigin = await probeInitialize(target.url, { Origin: "https://attacker.example" });
+    ctx.http = { unauthenticated, invalidToken, foreignOrigin, userSuppliedAuth };
     if (unauthenticated.status === null && !userSuppliedAuth) throw new Error(`Could not reach ${target.url}: ${unauthenticated.error}`);
   }
 

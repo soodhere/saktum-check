@@ -11,13 +11,13 @@ import { fixture, root, startHttpFixture } from "./helpers.js";
 
 const packs = loadPackDir(root + "packs");
 
-const GOOD = ["good", "oauth-good"];
+const GOOD = ["good", "oauth-good", "good-http"];
 /** Narrow, documented exceptions: failures that cannot be produced by a local fixture, proven against the analyser directly. */
 const UNIT_PROVEN_FAILURES: Record<string, () => Promise<string>> = {
   // A failing case needs plain HTTP on a non-local host; every test fixture runs on localhost, where HTTP is allowed.
   "auth.https": async () => (await analysers["auth-https"]!({ tools: [], target: { kind: "streamable-http", url: "http://api.example.com/mcp" } })).status
 };
-const BAD = ["broken", "malicious", "leaky", "faulty", "raw-init", "raw-list", "oauth-broken"];
+const BAD = ["broken", "malicious", "leaky", "faulty", "raw-init", "raw-list", "oauth-broken", "broken-http"];
 
 describe("every check has a passing and a failing fixture", () => {
   const results: Record<string, Result> = {};
@@ -26,6 +26,11 @@ describe("every check has a passing and a failing fixture", () => {
     // good and faulty run in active mode, so the functional checks (active only) have a passing and a failing case.
     for (const f of ["broken", "malicious", "leaky", "raw-init", "raw-list"] as const) results[f] = await runTrustCheck(fixture(f), { packs });
     for (const f of ["good", "faulty"] as const) results[f] = await runTrustCheck(fixture(f), { packs, mode: "active" });
+    // Plain HTTP fixtures: good validates the Origin header, broken does not (sec.http.origin).
+    for (const [label, f] of [["good-http", "good"], ["broken-http", "broken"]] as const) {
+      const h = await startHttpFixture(f); stops.push(h.stop);
+      results[label] = await runTrustCheck({ kind: "streamable-http", url: h.url }, { packs });
+    }
     for (const f of ["oauth-good", "oauth-broken"] as const) {
       const h = await startHttpFixture(f); stops.push(h.stop);
       results[f] = await runTrustCheck({ kind: "streamable-http", url: h.url, ...(f === "oauth-good" ? { headers: { Authorization: "Bearer fixture-good-token" } } : {}) }, { packs });

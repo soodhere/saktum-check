@@ -16,12 +16,14 @@ export function makeServer(name: string, tools: unknown[], onCall: CallHandler):
 }
 
 /** Start over stdio, or over Streamable HTTP (stateless) when started with --http <port>. */
-export async function start(factory: () => Server): Promise<void> {
+export async function start(factory: () => Server, opts: { validateOrigin?: boolean } = {}): Promise<void> {
   const i = process.argv.indexOf("--http");
   if (i < 0) { await factory().connect(new StdioServerTransport()); return; }
   const port = Number(process.argv[i + 1] ?? 0);
   const http = createServer(async (req, res) => {
     if (req.url !== "/mcp") { res.writeHead(404).end(); return; }
+    const origin = req.headers["origin"];
+    if (opts.validateOrigin && typeof origin === "string" && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) { res.writeHead(403).end("Forbidden origin"); return; }
     let body = ""; for await (const chunk of req) body += chunk;
     const server = factory();
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });

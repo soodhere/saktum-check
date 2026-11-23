@@ -24,3 +24,10 @@ checks:
     safety: passive
     steps: [{ action: analyse, analyser: short-descriptions }]
     fix: Describe what the tool does, when to use it and when not to, in at least a full sentence.
+  - id: ax.client-compat
+    title: Fits common client and model-provider constraints
+    severity: info
+    safety: passive
+    scored: false
+    steps: [{ action: analyse, analyser: client-compat }]
+    fix: Use tool names of 1 to 64 letters, digits, underscores and hyphens, keep them short enough for a server prefix, and keep the tool count manageable.

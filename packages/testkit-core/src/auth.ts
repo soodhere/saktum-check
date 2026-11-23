@@ -161,4 +161,19 @@ export const authAnalysers: Record<string, Analyser> = {
   }
 };
 
+/** Origin validation (MCP transport security: servers must validate Origin to prevent DNS rebinding). Applied to local
+ *  HTTP servers, where rebinding lets any web page the user visits reach the server; remote servers often allow
+ *  cross-origin clients on purpose and are protected by sign-in instead. */
+authAnalysers["origin-validation"] = (ctx) => {
+  const u = serverUrl(ctx);
+  if (!u) return skippedNotHttp;
+  if (!isLocal(u)) return { status: "skipped", message: "Applies to local HTTP servers, where DNS rebinding can expose them to web pages." };
+  const p = ctx.http?.foreignOrigin;
+  if (!p || p.status === null) return { status: "inconclusive", message: "No answer to a request from a foreign web origin." };
+  if (p.status === 403 || p.status === 400) return { status: "pass", message: `Refuses requests from foreign web origins (HTTP ${p.status}).` };
+  if (p.status === 401) return { status: "pass", message: "Requires sign-in, which also blocks requests from foreign web origins that carry no token." };
+  if (p.status >= 200 && p.status < 300) return { status: "fail", message: "Accepted a request claiming to come from an unrelated web page (Origin: https://attacker.example). Through DNS rebinding, any website the user visits could call this local server." };
+  return { status: "inconclusive", message: `Answered a foreign-origin request with HTTP ${p.status}.` };
+};
+
 export const AUTH_NEEDS = Object.fromEntries(Object.keys(authAnalysers).map((k) => [k, "none" as const]));

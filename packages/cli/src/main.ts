@@ -2,9 +2,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { badgeSvg, checksTable, renderHtml, renderTerminal, SELF_SIGNED_NOTE } from "@saktum/report";
+import { badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { compileContract, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, runTrustCheck, sanitizeText, type Result, type Severity } from "@saktum/testkit-core";
+import { compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
 
@@ -83,6 +84,80 @@ export async function main(argv = process.argv): Promise<number> {
     .action((o: { markdown: boolean; packs?: string }) => {
       const packs = o.packs ? loadPackDir(o.packs) : existsSync(bundledPacks) ? loadPackDir(bundledPacks) : loadEmbeddedPacks();
       process.stdout.write(checksTable(packs, o.markdown));
+    });
+
+
+  /** Connect to a target and list its tools (for the provider toolkit commands). */
+  const listTarget = async (targetParts: string[], env: string[], header: string[]) => {
+    const target = parseTarget(targetParts);
+    if (target.kind === "stdio" && env.length) target.env = parseEnv(env);
+    if (target.kind === "streamable-http" && header.length) target.headers = parseHeaders(header);
+    const s = await connect(target);
+    try { return { target, tools: await s.listTools(), server: s.serverInfo as Record<string, unknown> | undefined }; } finally { await s.close(); }
+  };
+
+  program.command("fix")
+    .description("Suggest annotations (and other quick fixes) for every tool, as code to paste")
+    .argument("<target...>", "https://host/mcp  or  -- node server.js")
+    .option("--format <ts|py|json>", "code style: TypeScript SDK, Python SDK, or JSON", "ts")
+    .option("--env <KEY=VALUE>", "environment variable for a local server (repeatable)", collect, [] as string[])
+    .option("--header <Name: value>", "HTTP header for a remote server (repeatable)", collect, [] as string[])
+    .action(async (targetParts: string[], o: { format: "ts" | "py" | "json"; env: string[]; header: string[] }) => {
+      const { tools } = await listTarget(targetParts, o.env, o.header);
+      process.stdout.write(renderFix(tools, o.format));
+    });
+
+  program.command("snapshot")
+    .description("Write a lock file of the server's tools, to detect breaking or silent changes later with saktum diff")
+    .argument("<target...>", "https://host/mcp  or  -- node server.js")
+    .option("--out <file>", "lock file", "saktum.lock.json")
+    .option("--env <KEY=VALUE>", "environment variable for a local server (repeatable)", collect, [] as string[])
+    .option("--header <Name: value>", "HTTP header for a remote server (repeatable)", collect, [] as string[])
+    .action(async (targetParts: string[], o: { out: string; env: string[]; header: string[] }) => {
+      const { tools, server } = await listTarget(targetParts, o.env, o.header);
+      writeFileSync(o.out, JSON.stringify(toolsLock(tools, server), null, 2) + "\n");
+      process.stdout.write(`Wrote ${sanitizeText(o.out)} with ${tools.length} tools. Commit it; run saktum diff in CI to catch breaking or silent changes.\n`);
+    });
+
+  program.command("diff")
+    .description("Compare tools with a lock file: breaking changes, risky changes (silent tool changes), additions, and the version bump they need")
+    .argument("<lock>", "the lock file written by saktum snapshot")
+    .argument("[target...]", "a second lock file, or the server to compare (after --)")
+    .option("--allow-breaking", "do not fail on breaking or risky changes", false)
+    .option("--env <KEY=VALUE>", "environment variable for a local server (repeatable)", collect, [] as string[])
+    .option("--header <Name: value>", "HTTP header for a remote server (repeatable)", collect, [] as string[])
+    .action(async (lock: string, rest: string[], o: { allowBreaking: boolean; env: string[]; header: string[] }) => {
+      const before = JSON.parse(readFileSync(lock, "utf8")) as ToolsLock;
+      const after = rest.length === 1 && rest[0]!.endsWith(".json") ? (JSON.parse(readFileSync(rest[0]!, "utf8")) as ToolsLock) : { tools: (await listTarget(rest, o.env, o.header)).tools };
+      const d = diffLocks(before, after);
+      const mark = { breaking: "\u2717 BREAKING", risky: "! REVIEW  ", addition: "+ ADDED   ", change: "~ CHANGED " };
+      for (const c of d.changes) process.stdout.write(`${mark[c.kind]} ${sanitizeText(c.tool, 60)}: ${sanitizeText(c.detail, 200)}\n`);
+      process.stdout.write(`\n${d.summary}\n`);
+      exitCode = !o.allowBreaking && d.changes.some((c) => c.kind === "breaking" || c.kind === "risky") ? 1 : 0;
+    });
+
+  program.command("docs")
+    .description("Generate a Markdown tools table and ready-to-paste client configuration")
+    .argument("<target...>", "https://host/mcp  or  -- npx -y your-package")
+    .option("--name <name>", "server name in the client configuration")
+    .option("--env <KEY=VALUE>", "environment variable for a local server (repeatable)", collect, [] as string[])
+    .option("--header <Name: value>", "HTTP header for a remote server (repeatable)", collect, [] as string[])
+    .action(async (targetParts: string[], o: { name?: string; env: string[]; header: string[] }) => {
+      const { target, tools, server } = await listTarget(targetParts, o.env, o.header);
+      const name = o.name ?? String(server?.["name"] ?? "server");
+      process.stdout.write(docsFor(tools, name, target.kind === "stdio" ? { command: target.command, args: target.args } : { url: target.url }));
+    });
+
+  program.command("packet")
+    .description("Turn a signed result into a printable security packet for customers' security reviews")
+    .argument("<result>", "a signed result (saktum-report.json)")
+    .option("--out <file>", "HTML packet (print to PDF from a browser)", "saktum-security-packet.html")
+    .action((file: string, o: { out: string }) => {
+      const doc = JSON.parse(readFileSync(file, "utf8")) as Result & { signature?: unknown };
+      const v = verifyDocument(doc);
+      if (!v.valid) throw new Error(`The result's signature is not valid (${v.reason}); a packet must be built from an unaltered signed result.`);
+      writeFileSync(o.out, renderPacket(doc, v.kid));
+      process.stdout.write(`Wrote ${sanitizeText(o.out)}: open it in a browser and print to PDF. Send it with ${sanitizeText(file)} so customers can verify it.\n`);
     });
 
   program.command("doctor")

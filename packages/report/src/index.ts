@@ -205,3 +205,35 @@ export function checksTable(packs: { pack: { id: string; category: string; check
     ...rows.map((x) => `| \`${x.id}\` | ${x.title} | ${x.area} | ${x.severity} | ${x.scored} | ${x.when} | ${x.basis.replace(/\|/g, "/")} |`)].join("\n") + "\n";
   return rows.map((x) => `${x.id.padEnd(34)} ${x.area.padEnd(16)} ${x.severity.padEnd(9)} ${x.when.padEnd(32)} ${x.title}`).join("\n") + "\n";
 }
+
+
+/** The vendor security packet: one printable document a provider attaches to a customer's security questionnaire.
+ *  Everything measured comes from the signed result; provider statements are clearly marked as not verified. */
+export function renderPacket(r: Result, signedBy?: string): string {
+  const e = (x: unknown) => escapeHtml(sanitizeText(x, 2000));
+  const name = `${r.target.serverInfo?.["name"] ?? r.target.description} ${r.target.serverInfo?.["version"] ?? ""}`.trim();
+  const card = trustCard(r).map((x) => `<tr><td><b>${e(x.dimension)}</b></td><td class="m">${e(x.mark)}</td><td>${e(x.text)}</td></tr>`).join("");
+  const problems = r.findings.filter((f) => f.status === "fail" && !f.suppressed).map((f) => `<tr><td>${e(f.severity)}</td><td>${e(f.title)}</td><td>${e(f.message ?? "")}</td></tr>`).join("") || `<tr><td colspan="3">No failed checks in this run.</td></tr>`;
+  const caps = (r.capabilities?.capabilities ?? []).map((c) => `<li>${e(c.label)} <small>(${e(c.basis)}: ${e(c.tools.join(", "))})</small></li>`).join("") || "<li>No notable capabilities inferred.</li>";
+  const tests = (r.tests ?? []).map((t) => `<li>${t.status === "pass" ? "\u2713" : t.status === "fail" ? "\u2717" : "-"} ${e(t.id)} (${e(t.tool)})</li>`).join("");
+  const declare = ["Data the server processes, and whether it includes personal data", "Where it is hosted, and data residency", "Logging and retention of requests and results", "Credentials it needs and how they are stored", "How to report a security issue, and response time", "Incident notification commitment"]
+    .map((q) => `<tr><td>${e(q)}</td><td class="blank">&nbsp;</td></tr>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security packet: ${e(name)}</title>
+<style>body{font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#16161d;max-width:860px;margin:32px auto;padding:0 20px}h1{font-size:26px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 8px;border-bottom:2px solid #16161d;padding-bottom:4px}
+table{border-collapse:collapse;width:100%}td,th{border-top:1px solid #ddd;padding:7px 6px;vertical-align:top;text-align:left}.m{width:28px;text-align:center}.blank{width:55%;border-bottom:1px solid #999}.muted{color:#555}.grades{font-size:20px;font-weight:700}
+@media print{body{margin:0}h2{break-after:avoid}}</style></head><body>
+<h1>Security packet: ${e(name)}</h1>
+<p class="muted">Prepared with Saktum Check ${e(r.tool.version)} on ${e(r.run.startedAt.slice(0, 10))} (${e(r.run.mode)} run). Assurance level ${e(r.assuranceLevel ?? "L1")}: self-tested by the provider; the result is signed so it cannot be changed without detection.</p>
+<p class="grades">Trust ${e(r.grade ?? "-")} &middot; Agent readiness ${e(r.readiness?.grade ?? "-")}</p>
+${(r.summary ?? []).map((l) => `<p>${e(l)}</p>`).join("")}
+<h2>1. Trust card</h2><table>${card}</table>
+<h2>2. Open findings</h2><table><tr><th>Severity</th><th>Check</th><th>Detail</th></tr>${problems}</table>
+<h2>3. What the tools can do</h2><ul>${caps}</ul>${r.capabilities?.lethalTrifecta ? "<p><b>Note:</b> the tools combine private data, untrusted content and an outbound channel; customers should limit what an agent can combine.</p>" : ""}
+${tests ? `<h2>4. Provider test cases</h2><ul>${tests}</ul>` : ""}
+<h2>${tests ? 5 : 4}. Scope and limits</h2>${scopeOfRun(r).map((l) => `<p>${e(l)}</p>`).join("")}<p class="muted">${e(COVERAGE_NOTE)} ${e(DISCLAIMER)}</p>
+<h2>${tests ? 6 : 5}. Verify this evidence</h2><p>The full signed result accompanies this packet${signedBy ? ` (signed by <code>${e(signedBy)}</code>)` : ""}. Anyone can check it was not altered: <code>npx saktum verify saktum-report.json</code>.</p>
+<h2>${tests ? 7 : 6}. Provider statements (completed by the provider; not verified by Saktum)</h2><table>${declare}</table>
+</body></html>
+`;
+}

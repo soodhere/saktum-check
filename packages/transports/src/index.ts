@@ -5,7 +5,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { McpError } from "@modelcontextprotocol/sdk/types.js";
 
-export const USER_AGENT = "saktum-check/0.2.0 (+https://saktum.dev/check)";
+export const USER_AGENT = "saktum-check/0.3.0 (+https://saktum.dev/check)";
 export const LIMITS = { requestTimeoutMs: 10_000, connectTimeoutMs: 60_000, maxResponseChars: 5_000_000 };
 
 export type TransportKind = "stdio" | "streamable-http";
@@ -92,10 +92,13 @@ export async function connect(target: Target): Promise<Session> {
   const transport = target.kind === "streamable-http"
     ? new StreamableHTTPClientTransport(new URL(target.url), { requestInit: { headers: { "User-Agent": USER_AGENT, ...(target.headers ?? {}) } } })
     : new StdioClientTransport({ command: target.command, args: target.args, env: minimalEnv(target.env), cwd: target.cwd, stderr: "ignore" });
+  // The SDK records the negotiated protocol version only on transports that accept it; give every transport a setter.
+  const tAny = transport as unknown as { protocolVersion?: string; setProtocolVersion?: (v: string) => void };
+  if (!tAny.setProtocolVersion) tAny.setProtocolVersion = (v: string) => { tAny.protocolVersion = v; };
   const t0 = Date.now();
   await withTimeout(client.connect(transport), LIMITS.connectTimeoutMs, "connect");
   const initMs = Date.now() - t0;
-  const anyTransport = transport as unknown as { protocolVersion?: string };
+  const anyTransport = transport as unknown as { protocolVersion?: string; setProtocolVersion?: (v: string) => void };
   return {
     transport: target.kind,
     description: describeTarget(target),
@@ -153,7 +156,7 @@ export interface HttpProbe {
 
 const INIT_BODY = JSON.stringify({
   jsonrpc: "2.0", id: 1, method: "initialize",
-  params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "saktum-trust-check-probe", version: "0.2.0" } }
+  params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "saktum-trust-check-probe", version: "0.3.0" } }
 });
 
 /** One bounded HTTP request. Never throws: network failures come back as { status: null, error }. */

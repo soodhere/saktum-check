@@ -1,0 +1,45 @@
+name: Saktum Check
+description: Test an MCP server for trust, functional behaviour, performance and agent readiness, with a signed result.
+author: Saktum
+branding: { icon: shield, color: purple }
+inputs:
+  target:
+    description: 'The server: "-- <command that starts it>" (for example "-- node build/index.js") or an https URL'
+    required: true
+  args:
+    description: 'Extra options, for example "--active --tests saktum.tests.yaml" (only use --active against your own server)'
+    required: false
+    default: ""
+  fail-on:
+    description: Fail the job on findings at or above this severity (critical, high, medium, low)
+    required: false
+    default: high
+  version:
+    description: Saktum Check version from npm
+    required: false
+    default: latest
+outputs:
+  report:
+    description: Path of the signed JSON result
+    value: saktum-report.json
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with: { node-version: 22 }
+    - name: Run Saktum Check
+      shell: bash
+      env: { TARGET: "${{ inputs.target }}", ARGS: "${{ inputs.args }}", FAIL_ON: "${{ inputs.fail-on }}", VERSION: "${{ inputs.version }}" }
+      run: |
+        set -f
+        eval "set -- $ARGS $TARGET"
+        set +e
+        npx -y "saktum@${VERSION}" check --out saktum-report.json --html saktum-report.html --badge saktum-badge.svg --fail-on "$FAIL_ON" "$@" > saktum-report.txt 2>&1
+        CODE=$?
+        set -e
+        { echo '## Saktum Check'; echo; echo '```'; head -c 60000 saktum-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        cat saktum-report.txt
+        exit $CODE
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with: { name: saktum-report, path: "saktum-report.json\nsaktum-report.html\nsaktum-badge.svg\nsaktum-report.txt", if-no-files-found: ignore }

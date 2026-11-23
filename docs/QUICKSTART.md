@@ -9,6 +9,11 @@ npx saktum test -- node ./build/index.js                        # run your saktu
 npx saktum check https://your-server.example/mcp                # a remote server: sign-in checks
 npx saktum check --header "Authorization: Bearer <token>" https://your-server.example/mcp   # and its tools
 npx saktum checks                                               # every check, with the standard behind it
+npx saktum fix -- node ./build/index.js                         # annotation code to paste (--format py for Python)
+npx saktum snapshot -- node ./build/index.js                    # lock your tools; then in CI:
+npx saktum diff saktum.lock.json -- node ./build/index.js       # breaking and silent changes, and the version bump
+npx saktum docs -- npx -y your-package                          # tools table and client configuration
+npx saktum packet saktum-report.json                            # a security packet for customers' reviews
 ```
 
 The report starts with **trust**, **agent readiness** and **functional** status, then a **trust card** (security,

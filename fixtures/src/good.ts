@@ -19,4 +19,4 @@ await start(() => makeServer("fixture-good", tools, (name, args) => {
   }
   if (name === "save_note") return { content: [{ type: "text", text: "Saved." }] };
   throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${name}`);
-}));
+}), { validateOrigin: true });
