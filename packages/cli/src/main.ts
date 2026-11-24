@@ -2,14 +2,51 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE } from "@saktum/report";
+import { badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { buildAllowlist, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
 
 const SEV: Severity[] = ["critical", "high", "medium", "low", "info"];
+
+/** Load a policy file and the allowlist it names (relative to the policy file). */
+async function loadPolicy(file: string): Promise<{ policy: Policy; allow?: Set<string> }> {
+  const { readFileSync: rf, existsSync: ex } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  if (!ex(file)) throw new Error(`Policy file not found: ${file}`);
+  const policy = await parsePolicy(rf(file, "utf8"));
+  let allow: Set<string> | undefined;
+  if (policy.allowlist) {
+    const path = resolve(dirname(file), policy.allowlist);
+    if (!ex(path)) throw new Error(`The policy's allowlist was not found: ${policy.allowlist}`);
+    allow = new Set((JSON.parse(rf(path, "utf8")) as { allowed: { toolsFingerprint?: string }[] }).allowed.map((a) => a.toolsFingerprint).filter((f): f is string => Boolean(f)));
+  }
+  return { policy, allow };
+}
+
+/** Read a ledger from a file or an https URL. */
+async function readLedgerText(src: string): Promise<string> {
+  if (/^https:\/\//.test(src)) { const r = await fetch(src, { headers: { "User-Agent": "saktum" } }); if (!r.ok) throw new Error(`Could not read the ledger (HTTP ${r.status})`); return r.text(); }
+  const { readFileSync: rf, existsSync: ex } = await import("node:fs");
+  return ex(src) ? rf(src, "utf8") : "";
+}
+
+/** First run: `saktum` with no command shows four journeys instead of the full command list. */
+export const WELCOME = `Saktum Check \u2014 make the tools AI agents use trustworthy.
+
+What would you like to do?
+
+  1. Test an MCP server          npx saktum check -- npx -y some-mcp-server
+                                 npx saktum check https://your-server.example/mcp
+  2. Start a new MCP server      npx saktum init my-server --lang ts   (or --lang py)
+  3. Let your coding agent       claude mcp add saktum -- npx -y saktum mcp
+     test and fix servers        (Cursor and VS Code: one-click buttons at saktum.vercel.app)
+  4. Check your agent set-up     npx saktum scan-config
+
+All commands: npx saktum --help \u00b7 Guide: https://github.com/soodhere/saktum-check
+`;
 const bundledPacks = fileURLToPath(new URL("../../../packs/", import.meta.url));
 const collect = (v: string, acc: string[]) => [...acc, v];
 const parseHeaders = (hs: string[]) => Object.fromEntries(hs.map((h) => { const i = h.indexOf(":"); if (i < 1) throw new Error(`--header must look like "Name: value"`); return [h.slice(0, i).trim(), h.slice(i + 1).trim()]; }));
@@ -19,12 +56,19 @@ export async function main(argv = process.argv): Promise<number> {
   let exitCode = 0;
   const program = new Command().name("saktum").version(ENGINE_VERSION).description("Saktum Check: test MCP servers for trust (conformance, sign-in, security), functional behaviour, performance and agent readiness.").exitOverride();
 
-  type CheckOpts = { packs?: string; out: string; html?: string; failOn: Severity; active: boolean; key?: string; env: string[]; header: string[]; pricePerMtok: string; call: string[]; tests?: string; ignore: string[]; badge?: string };
+  type CheckOpts = { packs?: string; out: string; html?: string; failOn: Severity; active: boolean; key?: string; env: string[]; header: string[]; pricePerMtok: string; call: string[]; tests?: string; ignore: string[]; badge?: string; sarif?: string; sarifAnchor: string; baseline?: string; updateBaseline: boolean; watch: boolean; watchDir: string; policy?: string };
   const withCheckOptions = (c: Command, testsDefault?: string) => c
     .option("--packs <dir>", "directory of packs (default: the built-in packs)")
     .option("--out <file>", "signed JSON result", "saktum-report.json")
     .option("--html <file>", "also write an HTML report")
     .option("--badge <file>", "also write a README badge (SVG) with the trust and agent-readiness grades")
+    .option("--sarif <file>", "also write SARIF 2.1.0 for GitHub code scanning")
+    .option("--sarif-anchor <path>", "file that SARIF results point to in your repository", "package.json")
+    .option("--baseline <file>", "fail only on findings that are not in this baseline file (accepted existing findings)")
+    .option("--update-baseline", "write the current failed checks to the --baseline file and exit successfully", false)
+    .option("--policy <file>", "your organisation's policy (saktum-policy.yaml): exit 1 if the server violates it")
+    .option("--watch", "re-run whenever a file changes (development loop; Ctrl+C to stop)", false)
+    .option("--watch-dir <dir>", "folder to watch with --watch", ".")
     .option("--fail-on <severity>", "exit 1 if any failure at or above this severity", "high")
     .option("--active", "call tools and measure load (only against servers you own; read-only tools unless named with --call)", false)
     .option("--call <tool>", "with --active: also call this tool even if it is not annotated read-only (repeatable)", collect, [] as string[])
@@ -61,16 +105,57 @@ export async function main(argv = process.argv): Promise<number> {
     writeFileSync(o.out, JSON.stringify(signed, null, 2));
     if (o.html) writeFileSync(o.html, renderHtml(signed));
     if (o.badge) writeFileSync(o.badge, badgeSvg(signed));
+    const keyOf = (f: { check: string; subject?: string }) => `${f.check}:${f.subject ?? ""}`;
+    const failing = signed.findings.filter((f) => f.status === "fail" && !f.suppressed);
+    let accepted = new Set<string>();
+    if (o.baseline && o.updateBaseline) {
+      writeFileSync(o.baseline, JSON.stringify({ baselineFormat: "0.1", createdAt: new Date().toISOString(), accepted: failing.map((f) => ({ check: f.check, subject: f.subject, severity: f.severity, title: f.title })) }, null, 2) + "\n");
+      process.stdout.write(`Wrote baseline ${sanitizeText(o.baseline)} accepting ${failing.length} existing finding(s). Commit it; later runs fail only on new findings.\n`);
+    } else if (o.baseline && existsSync(o.baseline)) {
+      accepted = new Set((JSON.parse(readFileSync(o.baseline, "utf8")) as { accepted: { check: string; subject?: string }[] }).accepted.map(keyOf));
+    }
+    if (o.sarif) writeFileSync(o.sarif, JSON.stringify(toSarif(signed, o.sarifAnchor, accepted), null, 2) + "\n");
     process.stdout.write(renderTerminal(signed) + "\n");
     process.stdout.write(`\nSigned result: ${sanitizeText(o.out)}  (verify with: saktum verify ${sanitizeText(o.out)})${o.badge ? `\nBadge: ${sanitizeText(o.badge)}` : ""}\n`);
     const threshold = SEV.indexOf(o.failOn);
-    return signed.findings.some((f) => f.status === "fail" && !f.suppressed && SEV.indexOf(f.severity) <= threshold) ? 1 : 0;
+    if (o.updateBaseline) return 0;
+    if (o.policy) {
+      const { policy, allow } = await loadPolicy(o.policy);
+      const verdict = evaluatePolicy(subjectFromResult(signed), policy, allow);
+      process.stdout.write(`\nPOLICY${policy.name ? ` (${sanitizeText(policy.name, 80)})` : ""}\n${renderVerdict(verdict)}\n`);
+      if (!verdict.compliant) return 1;
+    }
+    const newFails = failing.filter((f) => !accepted.has(keyOf(f)));
+    if (accepted.size) process.stdout.write(`Baseline: ${failing.length - newFails.length} accepted finding(s) ignored for the exit code; ${newFails.length} new.\n`);
+    return newFails.some((f) => SEV.indexOf(f.severity) <= threshold) ? 1 : 0;
   };
 
   withCheckOptions(program.command("check")
     .description("Test an MCP server: a URL, or the command that starts a local server (after --)")
     .argument("<target...>", "https://host/mcp  or  -- node server.js"))
-    .action(async (targetParts: string[], o: CheckOpts) => { exitCode = await runCheckCommand(targetParts, o); });
+    .action(async (targetParts: string[], o: CheckOpts) => { exitCode = o.watch ? await watchLoop(targetParts, o) : await runCheckCommand(targetParts, o); });
+
+  /** Development loop: run, then re-run on every change (ignoring dependencies, builds and reports). */
+  const watchLoop = async (targetParts: string[], o: CheckOpts): Promise<number> => {
+    const { watch } = await import("node:fs");
+    let timer: NodeJS.Timeout | undefined, running = false, again = false;
+    const once = async () => {
+      if (running) { again = true; return; }
+      running = true;
+      process.stdout.write(`\n\u2500\u2500 ${new Date().toLocaleTimeString()} \u2500\u2500\n`);
+      try { await runCheckCommand(targetParts, o); } catch (e) { process.stderr.write(`${sanitizeText((e as Error).message, 300)}\n`); }
+      running = false;
+      if (again) { again = false; await once(); }
+    };
+    await once();
+    process.stdout.write(`\nWatching ${sanitizeText(o.watchDir)} for changes (Ctrl+C to stop).\n`);
+    watch(o.watchDir, { recursive: true }, (_e, f) => {
+      const name = String(f ?? "");
+      if (/(^|[\\/])(node_modules|\.git|dist|build|\.venv|__pycache__)([\\/]|$)|saktum-report|\.sarif$/.test(name)) return;
+      clearTimeout(timer); timer = setTimeout(() => void once(), 600);
+    });
+    return new Promise<number>(() => undefined);
+  };
 
   withCheckOptions(program.command("test")
     .description("Run your test cases (saktum.tests.yaml by default) plus every check, against a server")
@@ -162,12 +247,25 @@ export async function main(argv = process.argv): Promise<number> {
 
   program.command("allowlist")
     .description("Build an allowlist for MCP firewalls and gateways from signed results: only servers meeting your criteria, pinned to the tools that were checked")
-    .argument("<results...>", "signed results (saktum-report.json files)")
+    .argument("[results...]", "signed results (saktum-report.json files)")
+    .option("--from-ledger [source]", "build it from the public Saktum trust ledger (or a ledger file or URL) instead of results")
+    .option("--trusted-signers <file>", "with --from-ledger: only accept entries signed by these keys (one did:key per line)")
     .option("--min-trust <grade>", "minimum trust grade", "A")
     .option("--min-readiness <grade>", "minimum agent-readiness grade", "B")
     .option("--allow-critical", "do not exclude servers with a failed critical check", false)
     .option("--out <file>", "allowlist file", "saktum-allowlist.json")
-    .action((files: string[], o: { minTrust: string; minReadiness: string; allowCritical: boolean; out: string }) => {
+    .action(async (files: string[], o: { minTrust: string; minReadiness: string; allowCritical: boolean; out: string; fromLedger?: string | boolean; trustedSigners?: string }) => {
+      if (o.fromLedger) {
+        const entries = parseLedger(await readLedgerText(typeof o.fromLedger === "string" ? o.fromLedger : DEFAULT_LEDGER_URL));
+        const check = verifyLedger(entries);
+        if (!check.ok) throw new Error(`The ledger does not verify: ${check.errors[0]}`);
+        const signers = o.trustedSigners ? new Set(readFileSync(o.trustedSigners, "utf8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) : undefined;
+        const list = allowlistFromLedger(entries, { minTrust: o.minTrust.toUpperCase(), minReadiness: o.minReadiness.toUpperCase(), trustedSigners: signers });
+        writeFileSync(o.out, JSON.stringify(list, null, 2) + "\n");
+        process.stdout.write(`Ledger verified (${check.count} entries). Wrote ${sanitizeText(o.out)}: ${list.allowed.length} allowed, ${list.excluded.length} excluded.\n`);
+        return;
+      }
+      if (!files.length) throw new Error("Give signed results, or use --from-ledger.");
       const inputs = files.map((f) => {
         const doc = JSON.parse(readFileSync(f, "utf8")) as Result;
         const v = verifyDocument(doc);
@@ -179,6 +277,269 @@ export async function main(argv = process.argv): Promise<number> {
       for (const a of list.allowed) process.stdout.write(`\u2713 ${sanitizeText(a.server, 60)} ${sanitizeText(a.version ?? "", 20)}  trust ${a.trustGrade} \u00b7 readiness ${a.readinessGrade} \u00b7 ${a.toolCount} tools pinned\n`);
       for (const x of list.excluded) process.stdout.write(`\u2717 ${sanitizeText(x.server, 60)}: ${sanitizeText(x.reason, 200)}\n`);
       process.stdout.write(`\nWrote ${sanitizeText(o.out)}: ${list.allowed.length} allowed, ${list.excluded.length} excluded.\n`);
+    });
+
+  program.command("init")
+    .description("Start a new MCP server that is trustworthy by default (annotations, output schema, test cases, CI, agent rules)")
+    .argument("[dir]", "folder to create the project in", ".")
+    .option("--lang <ts|py>", "TypeScript (MCP SDK) or Python (FastMCP)", "ts")
+    .option("--name <name>", "server name")
+    .action(async (dir: string, o: { lang: string; name?: string }) => {
+      const { initProject } = await import("./init.js");
+      const { basename, resolve } = await import("node:path");
+      const lang = o.lang === "py" ? "py" : "ts";
+      const files = initProject(dir, lang, o.name ?? basename(resolve(dir)));
+      process.stdout.write(`Created ${files.length} files in ${sanitizeText(dir)}:\n${files.map((f) => `  ${f}`).join("\n")}\n\nNext:\n`
+        + (lang === "ts" ? `  cd ${sanitizeText(dir)} && npm install\n  npx saktum test -- npx tsx src/index.ts\n` : `  cd ${sanitizeText(dir)}\n  npx saktum test -- uv run server.py\n`)
+        + `  Coding agents: AGENTS.md holds the rules they should follow.\n`);
+    });
+
+  program.command("lint")
+    .description("Static checks on tool registrations in your source code (TypeScript and Python MCP SDKs), with file and line")
+    .argument("[paths...]", "files or folders (default: the current folder)")
+    .option("--sarif <file>", "also write SARIF 2.1.0 (for GitHub code scanning and editors)")
+    .option("--strict", "exit 1 on warnings as well as errors", false)
+    .action((paths: string[], o: { sarif?: string; strict: boolean }) => {
+      const findings = lintPaths(paths.length ? paths : ["."], process.cwd());
+      for (const f of findings) process.stdout.write(`${sanitizeText(f.file)}:${f.line}: ${f.severity} ${f.check}: ${sanitizeText(f.message, 300)}\n    fix: ${sanitizeText(f.fix, 200)}\n`);
+      process.stdout.write(findings.length ? `\n${findings.length} finding(s) in tool definitions.\n` : "No problems found in tool definitions (files importing an MCP SDK).\n");
+      if (o.sarif) writeFileSync(o.sarif, JSON.stringify(lintSarif(findings, ENGINE_VERSION), null, 2) + "\n");
+      exitCode = findings.some((f) => f.severity === "error" || o.strict) ? 1 : 0;
+    });
+
+  program.command("call")
+    .description("Call one tool and show the result; --save-test turns the call into a test case (save as test)")
+    .argument("<tool>", "tool name")
+    .argument("<target...>", "https://host/mcp  or  -- node server.js")
+    .option("--args <json>", "arguments as JSON", "{}")
+    .option("--save-test <id>", "append this call and its result as a test case")
+    .option("--tests <file>", "test file to append to", "saktum.tests.yaml")
+    .option("--env <KEY=VALUE>", "environment variable for a local server (repeatable)", collect, [] as string[])
+    .option("--header <Name: value>", "HTTP header for a remote server (repeatable)", collect, [] as string[])
+    .action(async (toolName: string, targetParts: string[], o: { args: string; saveTest?: string; tests: string; env: string[]; header: string[] }) => {
+      let args: Record<string, unknown>;
+      try { args = JSON.parse(o.args) as Record<string, unknown>; } catch { throw new Error("--args must be JSON, for example '{\"city\":\"Toronto\"}'"); }
+      const target = parseTarget(targetParts);
+      if (target.kind === "stdio" && o.env.length) target.env = parseEnv(o.env);
+      if (target.kind === "streamable-http" && o.header.length) target.headers = parseHeaders(o.header);
+      const s = await connect(target);
+      let outcome, tool;
+      try { tool = (await s.listTools()).find((t) => t.name === toolName); if (!tool) throw new Error(`The server has no tool named ${sanitizeText(toolName, 60)}.`); outcome = await s.callTool(toolName, args); } finally { await s.close(); }
+      const text = outcome.kind === "result" ? (outcome.content as { type?: string; text?: string }[] ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n") : "";
+      const structured = outcome.kind === "result" ? (outcome as { structuredContent?: Record<string, unknown> }).structuredContent : undefined;
+      const isError = outcome.kind !== "result" || outcome.isError === true;
+      process.stdout.write(`${isError ? "\u2717 error" : "\u2713 ok"} in ${outcome.latencyMs} ms\n${sanitizeText(outcome.kind === "protocol-error" ? `protocol error ${outcome.code}: ${outcome.message}` : text, 2000)}\n${structured ? `structured: ${sanitizeText(JSON.stringify(structured), 1000)}\n` : ""}`);
+      if (o.saveTest) {
+        const expect: Record<string, unknown> = { isError };
+        const firstLine = text.trim().split("\n")[0]!.slice(0, 60).trim();
+        if (!isError && firstLine) expect.textContains = firstLine;
+        if (!isError && structured) expect.structured = Object.fromEntries(Object.entries(structured).filter(([, v]) => v === null || typeof v !== "object").slice(0, 5));
+        if (!isError && (tool as { outputSchema?: unknown }).outputSchema) expect.outputSchema = true;
+        expect.latencyMs = { lt: Math.max(2000, outcome.latencyMs * 5) };
+        const tc = { id: o.saveTest, tool: toolName, input: args, ...((tool!.annotations as { readOnlyHint?: boolean } | undefined)?.readOnlyHint === true ? {} : { sideEffects: true }), expect };
+        writeFileSync(o.tests, await appendTestCase(existsSync(o.tests) ? readFileSync(o.tests, "utf8") : undefined, tc as never));
+        process.stdout.write(`Saved test case ${sanitizeText(o.saveTest, 60)} to ${sanitizeText(o.tests)}. Run: saktum test -- <start command>\n`);
+      }
+    });
+
+  program.command("scan-config")
+    .description("Check every MCP server your agents load (Claude Desktop, Claude Code, Cursor, VS Code): total context cost, duplicate tools, unvetted servers")
+    .option("--config <file>", "a specific configuration file (repeatable); default: the known locations", collect, [] as string[])
+    .option("--yes", "start the servers without asking (they run with the settings in your configuration)", false)
+    .option("--turns-per-day <n>", "agent turns a day, for the monthly cost estimate", "50")
+    .option("--price-per-mtok <usd>", "your model's price per million input tokens", "3")
+    .option("--allowlist <file>", "saktum-allowlist.json: flag servers that are not on it")
+    .option("--out <file>", "also write the analysis as JSON (input for saktum fleet)")
+    .option("--policy <file>", "your organisation's policy: show which servers violate it")
+    .option("--machine <label>", "label for this machine in fleet reports (default: the host name)")
+    .action(async (o: { config: string[]; yes: boolean; turnsPerDay: string; pricePerMtok: string; allowlist?: string; out?: string; policy?: string; machine?: string }) => {
+      const { homedir } = await import("node:os");
+      const locations = o.config.length ? o.config.map((file) => ({ client: "configuration", file })) : configLocations(homedir(), process.cwd(), process.platform, process.env.APPDATA);
+      const servers = locations.filter((l) => existsSync(l.file)).flatMap((l) => parseClientConfig(readFileSync(l.file, "utf8"), l.client, l.file)).filter((x) => !x.disabled);
+      if (!servers.length) { process.stdout.write("No MCP servers found in the known configuration locations. Point to one with --config <file>.\n"); return; }
+      process.stdout.write(`Found ${servers.length} MCP server(s):\n`);
+      for (const x of servers) process.stdout.write(`  ${sanitizeText(x.name, 40).padEnd(28)} ${x.client.padEnd(22)} ${x.url ? sanitizeText(x.url, 80) : sanitizeText([x.command, ...(x.args ?? [])].join(" "), 100)}${x.env && Object.keys(x.env).length ? `  (with ${Object.keys(x.env).length} configured setting(s), not shown)` : ""}\n`);
+      if (!o.yes) {
+        if (!process.stdin.isTTY) { process.stdout.write("\nTo check them, Saktum starts each server with your configured settings. Re-run with --yes to agree.\n"); return; }
+        const rl = (await import("node:readline/promises")).createInterface({ input: process.stdin, output: process.stdout });
+        const answer = await rl.question("\nStart these servers on this machine to check them (passive: no tool is called)? [y/N] ");
+        rl.close();
+        if (!/^y(es)?$/i.test(answer.trim())) { process.stdout.write("Nothing was started.\n"); return; }
+      }
+      const packs = existsSync(bundledPacks) ? loadPackDir(bundledPacks) : loadEmbeddedPacks();
+      const scans: ServerScan[] = [];
+      for (const x of servers) {
+        let tools: ServerScan["tools"] = [];
+        try {
+          const target = x.url ? { kind: "streamable-http" as const, url: x.url, headers: x.headers } : { kind: "stdio" as const, command: x.command!, args: x.args ?? [], env: x.env };
+          const r = await runTrustCheck(target, { packs, onTools: (t) => { tools = t; } });
+          const subj = subjectFromResult(r, x.name);
+          scans.push({ name: x.name, client: x.client, trustGrade: r.grade ?? null, readinessGrade: r.readiness?.grade ?? null, tools, tokens: r.readiness?.contextTokens ?? 0, fingerprint: r.target.toolsFingerprint,
+            target: x.url ? redactUrl(x.url) : redactCommand(x.command, x.args), capabilities: subj.capabilities, lethalTrifecta: subj.lethalTrifecta, failedSeverities: subj.failedSeverities });
+        } catch (e) { scans.push({ name: x.name, client: x.client, trustGrade: null, readinessGrade: null, tools: [], tokens: 0, target: x.url ? redactUrl(x.url) : redactCommand(x.command, x.args), error: sanitizeText((e as Error).message, 120) }); }
+      }
+      const allow = o.allowlist ? new Set((JSON.parse(readFileSync(o.allowlist, "utf8")) as { allowed: { toolsFingerprint?: string }[] }).allowed.map((a) => a.toolsFingerprint).filter((f): f is string => Boolean(f))) : undefined;
+      const report = analyseSetup(scans, { turnsPerDay: Number(o.turnsPerDay) || 50, pricePerMTokUsd: Number(o.pricePerMtok) || 3, allowlistFingerprints: allow });
+      process.stdout.write("\n" + renderSetup(report));
+      if (o.policy) {
+        const { policy, allow } = await loadPolicy(o.policy);
+        process.stdout.write(`\nPOLICY${policy.name ? ` (${sanitizeText(policy.name, 80)})` : ""}\n`);
+        for (const sc of scans.filter((x) => !x.error)) process.stdout.write(renderVerdict(evaluatePolicy({ server: sc.name, trustGrade: sc.trustGrade, readinessGrade: sc.readinessGrade, capabilities: sc.capabilities ?? [], lethalTrifecta: Boolean(sc.lethalTrifecta), contextTokens: sc.tokens, failedSeverities: sc.failedSeverities ?? [], toolsFingerprint: sc.fingerprint }, policy, allow)) + "\n");
+      }
+      const { hostname } = await import("node:os");
+      if (o.out) writeFileSync(o.out, JSON.stringify({ ...report, machine: o.machine ?? hostname() }, null, 2) + "\n");
+    });
+
+  const ledger = program.command("ledger").description("The public Saktum trust ledger: signed attestations in an append-only, hash-chained log");
+  ledger.command("verify")
+    .description("Verify every signature and the hash chain of a ledger (default: the public ledger)")
+    .argument("[source]", "ledger file or https URL", DEFAULT_LEDGER_URL)
+    .action(async (src: string) => {
+      const r = verifyLedger(parseLedger(await readLedgerText(src)));
+      process.stdout.write(r.ok ? `\u2713 Ledger verified: ${r.count} entries, every signature valid, chain intact.\n` : `\u2717 Ledger does NOT verify:\n${r.errors.slice(0, 10).map((e) => `  ${sanitizeText(e, 200)}`).join("\n")}\n`);
+      exitCode = r.ok ? 0 : 1;
+    });
+  ledger.command("find")
+    .description("Find ledger entries for a server name or tool fingerprint")
+    .argument("<query>", "server name (or part of it) or tool fingerprint")
+    .option("--ledger <source>", "ledger file or https URL", DEFAULT_LEDGER_URL)
+    .action(async (q: string, o: { ledger: string }) => {
+      const hits = findInLedger(parseLedger(await readLedgerText(o.ledger)), q);
+      if (!hits.length) process.stdout.write("No entries found.\n");
+      for (const e of hits) process.stdout.write(`#${e.seq} ${sanitizeText(e.subject.server, 80)} ${sanitizeText(e.subject.version ?? "", 20)}  trust ${e.attestation.claims.trustGrade ?? "-"} \u00b7 readiness ${e.attestation.claims.readinessGrade ?? "-"} \u00b7 ${e.attestation.claims.assuranceLevel} \u00b7 checked ${e.attestation.checkedAt.slice(0, 10)} \u00b7 signed by ${e.signer.slice(0, 24)}\u2026\n`);
+    });
+  ledger.command("append")
+    .description("Append a signed attestation to a ledger file after verifying it (used by the ledger bot)")
+    .argument("<input>", "attestation JSON, or a text file (such as an issue body) containing it")
+    .requiredOption("--ledger <file>", "ledger file to append to")
+    .option("--issue <n>", "issue number that requested it")
+    .action((input: string, o: { ledger: string; issue?: string }) => {
+      const att = extractJson(readFileSync(input, "utf8"));
+      const { text, entry } = appendToLedger(existsSync(o.ledger) ? readFileSync(o.ledger, "utf8") : "", att, { via: "saktum-index issue", ...(o.issue ? { issue: Number(o.issue) } : {}) });
+      writeFileSync(o.ledger, text);
+      process.stdout.write(`Recorded entry #${entry.seq} for ${sanitizeText(entry.subject.server, 80)} (signed by ${entry.signer}); entry hash ${entry.entryHash}.\n`);
+    });
+
+  const agent = program.command("agent").description("Agent identity: give an agent its own key and a mandate signed by its owner (preview)");
+  agent.command("create")
+    .description("Create an agent identity (did:key) and a mandate you sign: allowed servers and tools, destructive actions, expiry")
+    .requiredOption("--name <name>", "agent name, for example \"Billing assistant\"")
+    .option("--purpose <text>", "what the agent is for")
+    .option("--owner-name <name>", "your name or team, shown in receipts")
+    .option("--allow-server <name>", "server the agent may use (repeatable; default: any)", collect, [] as string[])
+    .option("--allow-tool <name>", "tool the agent may use (repeatable; default: any)", collect, [] as string[])
+    .option("--allow-destructive", "allow tools declared destructive", false)
+    .option("--expires <date>", "last valid day, YYYY-MM-DD", new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10))
+    .option("--out <file>", "mandate file", "agent-mandate.json")
+    .option("--agent-key <file>", "where to keep the agent's own key", "agent-key.json")
+    .option("--key <file>", "your (owner's) signing key")
+    .action((o: { name: string; purpose?: string; ownerName?: string; allowServer: string[]; allowTool: string[]; allowDestructive: boolean; expires: string; out: string; agentKey: string; key?: string }) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(o.expires)) throw new Error("--expires must be YYYY-MM-DD");
+      const agentKey = loadOrCreateKey(o.agentKey);
+      const m = createMandate({ agentId: agentKey.kid, agentName: o.name, ownerName: o.ownerName, purpose: o.purpose, servers: o.allowServer, tools: o.allowTool, destructive: o.allowDestructive, expires: o.expires }, loadOrCreateKey(o.key));
+      writeFileSync(o.out, JSON.stringify(m, null, 2) + "\n");
+      process.stdout.write(`Agent ${sanitizeText(o.name, 80)}: ${agentKey.kid}\nMandate signed by ${m.owner.id}, valid until ${o.expires}: ${m.allow.servers ? `servers ${m.allow.servers.join(", ")}` : "any server"}; ${m.allow.tools ? `tools ${m.allow.tools.join(", ")}` : "any tool"}; destructive actions ${m.allow.destructive ? "allowed" : "not allowed"}.\nWrote ${sanitizeText(o.out)} and the agent key ${sanitizeText(o.agentKey)} (keep it private).\n`);
+    });
+  agent.command("verify")
+    .description("Check a mandate's owner signature and expiry")
+    .argument("<mandate>", "mandate file")
+    .action((f: string) => {
+      const m = JSON.parse(readFileSync(f, "utf8")) as Mandate;
+      const c = checkMandate(m);
+      process.stdout.write(c.ok ? `\u2713 Valid mandate for ${sanitizeText(m.agent.name, 80)} (${m.agent.id}), signed by ${m.owner.name ?? m.owner.id}, until ${m.expires}.\n` : `\u2717 ${c.reason}\n`);
+      exitCode = c.ok ? 0 : 1;
+    });
+
+  program.command("proxy")
+    .description("Put Saktum between an agent and a local MCP server: signed receipts for every tool call, and the agent's mandate observed or enforced (preview)")
+    .argument("<command...>", "the server command, after --")
+    .option("--mandate <file>", "the agent's mandate (from saktum agent create)")
+    .option("--agent-key <file>", "the agent's key, which signs receipts", "agent-key.json")
+    .option("--enforce", "block calls outside the mandate (default: observe and record only)", false)
+    .option("--receipts <file>", "receipt log (append-only, hash-chained)")
+    .action(async (parts: string[], o: { mandate?: string; agentKey: string; enforce: boolean; receipts?: string }) => {
+      const { homedir } = await import("node:os");
+      const { join } = await import("node:path");
+      let mandate: Mandate | undefined;
+      if (o.mandate) { mandate = JSON.parse(readFileSync(o.mandate, "utf8")) as Mandate; const c = checkMandate(mandate); if (!c.ok) throw new Error(`Mandate refused: ${c.reason}`); }
+      const agentKey = loadOrCreateKey(o.agentKey);
+      if (mandate && agentKey.kid !== mandate.agent.id) throw new Error("The agent key does not match the mandate's agent.");
+      const { runProxy } = await import("./proxy.js");
+      exitCode = await runProxy({ command: parts[0]!, args: parts.slice(1), receiptsPath: o.receipts ?? join(homedir(), ".saktum", "receipts.jsonl"), agentKey, mandate, enforce: o.enforce, log: (m) => process.stderr.write(`saktum: ${m}\n`) });
+    });
+
+  const receipts = program.command("receipts").description("Signed receipts of agent tool calls (from saktum proxy)");
+  receipts.command("verify")
+    .description("Verify every receipt's signature and the hash chain")
+    .argument("[file]", "receipt log")
+    .action(async (f?: string) => {
+      const { homedir } = await import("node:os"); const { join } = await import("node:path");
+      const r = verifyReceiptLog(parseReceiptLog(readFileSync(f ?? join(homedir(), ".saktum", "receipts.jsonl"), "utf8")));
+      process.stdout.write(r.ok ? `\u2713 ${r.count} receipts verified: every signature valid, chain intact.\n` : `\u2717 Receipts do NOT verify:\n${r.errors.slice(0, 10).map((e) => `  ${e}`).join("\n")}\n`);
+      exitCode = r.ok ? 0 : 1;
+    });
+  receipts.command("summary")
+    .description("The path, not the answer: which tools were called, how often, in what order, retries, denials, destructive actions")
+    .argument("[file]", "receipt log")
+    .option("--json", "print JSON", false)
+    .action(async (f: string | undefined, o: { json: boolean }) => {
+      const { homedir } = await import("node:os"); const { join } = await import("node:path");
+      const entries = parseReceiptLog(readFileSync(f ?? join(homedir(), ".saktum", "receipts.jsonl"), "utf8"));
+      const v = verifyReceiptLog(entries), s = summariseReceipts(entries);
+      if (o.json) { process.stdout.write(JSON.stringify({ verified: v.ok, ...s }, null, 2) + "\n"); return; }
+      process.stdout.write(`${s.calls} tool calls by ${s.agents.length} agent(s) on ${s.servers.join(", ") || "-"} \u00b7 receipts ${v.ok ? "verified" : "DO NOT verify"}\n`
+        + `  denied ${s.denied} \u00b7 errors ${s.errors} \u00b7 destructive actions allowed ${s.destructiveAllowed}${s.medianLatencyMs !== undefined ? ` \u00b7 median ${s.medianLatencyMs} ms` : ""}\n`
+        + s.byTool.map((t) => `  ${t.tool.padEnd(30)} ${t.count}`).join("\n") + "\n"
+        + (s.repeatedIdenticalCalls.length ? `  Repeated identical calls (possible retry storms): ${s.repeatedIdenticalCalls.map((r) => `${r.call} \u00d7${r.times}`).join(", ")}\n` : "")
+        + `  Order: ${s.order.join(" \u2192 ")}\n`);
+    });
+
+  program.command("fleet")
+    .description("Merge scan-config results from many machines into one organisation inventory, checked against your policy")
+    .argument("<setups...>", "JSON files written by saktum scan-config --out")
+    .option("--policy <file>", "your organisation's policy")
+    .option("--out <file>", "inventory as JSON")
+    .option("--html <file>", "inventory as an HTML page")
+    .action(async (files: string[], o: { policy?: string; out?: string; html?: string }) => {
+      const setups = files.map((f) => { const j = JSON.parse(readFileSync(f, "utf8")) as { machine?: string; servers: never[] }; return { machine: j.machine ?? f, servers: j.servers ?? [] }; });
+      const pol = o.policy ? await loadPolicy(o.policy) : undefined;
+      const fleet = buildFleet(setups, pol?.policy, pol?.allow);
+      process.stdout.write(renderFleet(fleet));
+      if (o.out) writeFileSync(o.out, JSON.stringify(fleet, null, 2) + "\n");
+      if (o.html) writeFileSync(o.html, fleetHtml(fleet));
+      exitCode = fleet.nonCompliant ? 1 : 0;
+    });
+
+  program.command("mcp")
+    .description("Run Saktum Check as an MCP server (stdio), so coding agents can test, fix, diff and document MCP servers")
+    .option("--packs <dir>", "directory of packs (default: the built-in packs)")
+    .action(async (o: { packs?: string }) => {
+      const packs = o.packs ? loadPackDir(o.packs) : existsSync(bundledPacks) ? loadPackDir(bundledPacks) : loadEmbeddedPacks();
+      const { startMcpServer } = await import("./mcp-server.js");
+      await startMcpServer(packs);
+    });
+
+  program.command("attest")
+    .description("Turn a signed result into a compact signed attestation for your README or registry listing")
+    .argument("<result>", "a signed result (saktum-report.json)")
+    .option("--out <file>", "attestation file", "saktum-attestation.json")
+    .option("--key <path>", "signing key file")
+    .option("--publish", "also print a link that publishes it to the public Saktum trust ledger (a pre-filled GitHub issue)", false)
+    .action((file: string, o: { out: string; key?: string; publish: boolean }) => {
+      const doc = JSON.parse(readFileSync(file, "utf8")) as Result;
+      const v = verifyDocument(doc);
+      if (!v.valid) throw new Error(`The result's signature is not valid (${v.reason}); attestations are built only from unaltered signed results.`);
+      const att = signDocument(buildAttestation(doc), loadOrCreateKey(o.key));
+      writeFileSync(o.out, JSON.stringify(att, null, 2) + "\n");
+      const c = att.claims, colour = (g: string | null) => ({ A: "2e7d32", B: "558b2f", C: "f9a825", D: "ef6c00", F: "c62828" } as Record<string, string>)[g ?? ""] ?? "757575";
+      process.stdout.write(`Wrote ${sanitizeText(o.out)} (trust ${c.trustGrade ?? "-"}, agent readiness ${c.readinessGrade ?? "-"}; evidence: ${Object.entries(c.evidence).filter(([, x]) => x).map(([k]) => k).join(", ") || "none"}).\n`
+        + `Anyone can check it: npx saktum verify ${sanitizeText(o.out)}\n\nREADME badge:\n`
+        + `[![Saktum trust ${c.trustGrade ?? "-"}](https://img.shields.io/badge/Saktum-trust%20${c.trustGrade ?? "-"}%20%C2%B7%20readiness%20${c.readinessGrade ?? "-"}-${colour(c.trustGrade)})](${sanitizeText(o.out)})\n`);
+      if (o.publish) {
+        const body = `Publishing a signed Saktum attestation to the public trust ledger. The bot verifies the signature and appends it.\n\n\`\`\`json\n${JSON.stringify(att)}\n\`\`\`\n`;
+        const url = `https://github.com/soodhere/saktum-index/issues/new?title=${encodeURIComponent(`Attest: ${att.subject.server}`)}&body=${encodeURIComponent(body)}`;
+        process.stdout.write(`\nPublish to the public trust ledger (opens a pre-filled GitHub issue; anyone can then verify it):\n${url}\n`);
+      }
     });
 
   program.command("doctor")
@@ -204,6 +565,7 @@ export async function main(argv = process.argv): Promise<number> {
       process.stdout.write(`\u2713 Valid signature by ${v.kid}\n  Grade: ${doc.grade ?? "-"} (score ${doc.scores.overall ?? "n/a"}) \u00b7 assurance ${doc.assuranceLevel ?? "L1"}\n  Runner: ${doc.run.runner}${doc.run.runner === "self" ? ` \u2014 ${SELF_SIGNED_NOTE}` : ""}\n  Packs: ${doc.packs.map((p: { id: string; version: string }) => `${p.id} ${p.version}`).join(", ")}\n  Tools fingerprint: ${doc.target.toolsFingerprint}\n`);
     });
 
+  if (argv.length <= 2) { process.stdout.write(WELCOME); return 0; }
   try { await program.parseAsync(argv); }
   catch (e) {
     const err = e as { code?: string; exitCode?: number; message?: string };

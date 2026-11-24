@@ -11,6 +11,19 @@ npx saktum check https://your-server.example/mcp     # a remote server (sign-in 
 
 Runs on your machine. Nothing is uploaded. Your own environment variables are never passed to the server.
 
+## Start here
+
+| I want to… | Run |
+| --- | --- |
+| **Test an MCP server** | `npx saktum check -- npx -y some-mcp-server` (or `npx saktum check https://your-server/mcp`) |
+| **Start a new MCP server** that earns top grades from the first commit | `npx saktum init my-server --lang ts` (or `--lang py`) |
+| **Let my coding agent test and fix servers** | Claude Code: `claude mcp add saktum -- npx -y saktum mcp` · Cursor and VS Code: one-click buttons at [saktum.vercel.app](https://saktum.vercel.app) |
+| **Check my whole agent set-up** (cost, duplicate tools, unvetted servers) | `npx saktum scan-config` |
+
+| **Govern MCP use across my organisation** (inventory, policy as code, evidence) | See [docs/ENTERPRISE.md](docs/ENTERPRISE.md): `saktum fleet`, `--policy`, allowlists, security packets |
+
+Everything else (CI, test cases, lint, diff, allowlists, attestations, security packets) is below.
+
 ## What you get
 
 ```
@@ -51,6 +64,71 @@ grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories th
   `npx saktum checks` lists every check with the standard behind it ([docs/CHECKS.md](docs/CHECKS.md)).
 - **Control:** `--ignore check.id="reason"` (shown in the report, not scored) and `--badge badge.svg` for your README.
 
+## Govern what agents do: identity, mandates, signed receipts (preview)
+
+Testing servers is half the story; the other half is **what agents actually do with them**. Give an agent its own
+identity and a mandate you sign, put Saktum between the agent and a local MCP server, and every tool call gets a
+**signed, hash-chained receipt**: which tools, how often, in what order, what was blocked.
+
+```
+npx saktum agent create --name "Billing assistant" --allow-tool get_invoice --allow-tool list_invoices   # did:key + signed mandate
+npx saktum proxy --mandate agent-mandate.json --enforce -- npx -y billing-mcp-server                     # use in place of the server command
+npx saktum receipts summary          # the path, not the answer: tools, order, retry storms, denials, destructive actions
+npx saktum receipts verify           # every signature and the chain
+```
+
+Observe by default; `--enforce` blocks calls outside the mandate (including tools declared destructive, unless allowed),
+with an honest error to the agent. Receipts follow Saktum's receipt contract and store arguments only as a digest.
+Preview limits: local (stdio) servers; receipts are signed by the agent side (bilateral receipts, co-signed by the
+server side, come with the Saktum gateway).
+
+## The trust ledger: Certificate Transparency for AI agent tools
+
+Providers publish signed attestations to a **public, append-only, hash-chained ledger**; anyone can verify every
+signature and the whole chain; firewalls, gateways and enterprises build allowlists from it.
+
+```
+npx saktum attest saktum-report.json --publish        # publish yours (opens a pre-filled issue; a bot verifies and records it)
+npx saktum ledger verify                               # verify the public ledger: signatures and chain
+npx saktum ledger find my-server                       # look a server up
+npx saktum allowlist --from-ledger --trusted-signers signers.txt   # an allowlist for your MCP firewall
+```
+
+Entries are signed claims with their assurance level stated (L1 = self-tested); independent re-checks come later.
+
+## Start right, and test while you build (shift left)
+
+| Command | What it does |
+| --- | --- |
+| `saktum init my-server --lang ts` (or `py`) | A new MCP server that is trustworthy by default: an annotated example tool with an output schema, test cases, CI with Saktum Check and code scanning, and `AGENTS.md` rules for coding agents. Both templates earn trust A and agent readiness A out of the box |
+| `saktum lint` | Static checks on tool registrations in your source (TypeScript and Python SDKs): missing annotations, weak descriptions, names model providers reject, with file and line (`--sarif` for editors and GitHub) |
+| `saktum call <tool> --args '{...}' --save-test <id> -- <server>` | Call a tool, see the result, and save it as a test case in `saktum.tests.yaml` |
+| `saktum check --watch -- <server>` | Re-run on every file change while you develop |
+
+**For coding agents:** `skills/saktum-mcp-builder/` is a Claude Code skill (copy it into `~/.claude/skills/`), and
+`agents/` holds an `AGENTS.md` section and Cursor rules, so the agents writing MCP servers follow the same practices.
+
+## Use it from your coding agent (Saktum as an MCP server)
+
+Add Saktum to Claude Desktop, Claude Code, Cursor or VS Code, and ask your agent to test and fix MCP servers:
+
+```json
+{ "mcpServers": { "saktum": { "command": "npx", "args": ["-y", "saktum", "mcp"] } } }
+```
+
+Try: *"Check the MCP server started by `node build/index.js` and fix anything below A."* ·
+*"Suggest annotations for my server's tools in Python."* · *"Did my changes break anything compared with saktum.lock.json?"*
+
+Tools: `check_server`, `suggest_annotations`, `diff_against_lock`, `generate_docs`, `explain_check`, `list_checks`.
+Passive by default; local targets start on your machine; `active` only for servers you own. Saktum's own server earns
+trust A and agent readiness A under its own checks.
+
+## Check your whole agent set-up
+
+`npx saktum scan-config` finds the MCP servers in Claude Desktop, Claude Code, Cursor and VS Code, asks before starting
+them, and reports what they cost together every turn (and per month), duplicate and look-alike tools across servers,
+servers not on your allowlist, and the weakest grades. Configured secrets are never printed.
+
 ## The provider toolkit
 
 | Command | What it does |
@@ -60,17 +138,20 @@ grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories th
 | `saktum diff saktum.lock.json -- <server>` | Breaking changes (removed tools, new required fields, changed types), changes to review (descriptions, annotations: silent tool changes), additions, and the version bump they need; fails CI on breaking or risky changes |
 | `saktum docs -- <server>` | A Markdown tools table and ready-to-paste configuration for Claude Desktop, Cursor and VS Code |
 | `saktum allowlist reports/*.json` | An allowlist for MCP firewalls and gateways: only servers meeting your grades, each pinned to the exact tools that were checked (signatures verified first) |
+| `saktum attest saktum-report.json` | A compact signed attestation (grades, maturity evidence, tool fingerprint) plus a README badge; anyone can check it with `saktum verify` |
 | `saktum packet saktum-report.json` | A printable **security packet** for customers' security reviews, built from a verified signed result, with a section for your own statements (clearly marked as not verified) |
 
 ## In CI (GitHub Action)
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.3.2
+- uses: soodhere/saktum-check@v0.4.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server
     fail-on: high
+    sarif: "true"        # findings in GitHub's Security tab (add permissions: security-events: write)
+    baseline: saktum-baseline.json   # optional: fail only on new findings
 ```
 
 The report appears in the job summary; the signed result, HTML report and badge are saved as an artifact.

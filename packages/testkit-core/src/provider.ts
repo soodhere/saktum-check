@@ -61,7 +61,7 @@ export function renderFix(tools: ToolDef[], format: "ts" | "py" | "json" = "ts")
   lines.push(`Saktum fix: annotation suggestions for ${tools.length} tools (review each before applying; Saktum suggests, you decide).`);
   lines.push(`${todo.length} to add, ${review.length} need your judgement, ${conflicts.length} possible conflict${conflicts.length === 1 ? "" : "s"}, ${s.filter((x) => x.current && !x.conflict).length} already annotated.`);
   lines.push("");
-  if (format === "py") lines.push("from mcp.types import ToolAnnotations", "");
+  if (format === "py") lines.push("# For the MCP Python SDK v1 (FastMCP); in v2, FastMCP was renamed MCPServer.", "from mcp.types import ToolAnnotations", "");
   for (const x of todo) {
     lines.push(format === "py"
       ? `# ${sanitizeText(x.tool, 60)}: ${x.reason}\n@mcp.tool(annotations=${pyValue(x.suggested!)})`
@@ -190,4 +190,33 @@ export function buildAllowlist(results: { result: { target: { description: strin
   }
   return { allowlistFormat: "0.1", generatedAt: new Date().toISOString(), criteria, allowed, excluded,
     note: "Allow each server only while its tools match toolsFingerprint; re-check after any change (saktum diff). Self-tested evidence (assurance L1) unless stated otherwise." };
+}
+
+// ---------- saktum attest: a compact attestation for READMEs and registry listings ----------
+
+export interface Attestation {
+  attestationFormat: "0.1";
+  subject: { server: string; version?: string; transport: string; target: string; toolsFingerprint?: string; toolCount?: number };
+  claims: { trustGrade: string | null; readinessGrade: string | null; trustScore: number | null; readinessScore: number | null;
+    evidence: { responds: boolean; conformant: boolean; safeByDefault: boolean; agentReady: boolean }; assuranceLevel: string };
+  checkedAt: string; checkedWith: string; resultDigest: string; note: string;
+}
+
+/** Build an attestation from a verified signed result. Maturity evidence L1 to L4 is measured from the run itself;
+ *  L5 also needs supply-chain evidence (provenance, install scripts), which the census adds from registry metadata. */
+export function buildAttestation(r: { target: { description: string; transport: string; serverInfo?: Record<string, unknown>; toolsFingerprint?: string; toolCount?: number };
+  grade?: string | null; scores: { overall: number | null }; readiness?: { grade: string | null; score: number } | null; assuranceLevel?: string;
+  findings: { pack: string; status: string; scored: boolean; suppressed?: unknown }[]; run: { startedAt: string }; tool: { version: string } }): Attestation {
+  const failedIn = (pack: string) => r.findings.some((f) => f.pack === pack && f.status === "fail" && f.scored && !f.suppressed);
+  const responds = r.grade !== null && r.grade !== undefined && (r.target.toolCount ?? 0) > 0;
+  const conformant = responds && !failedIn("conformance");
+  const safeByDefault = conformant && !failedIn("security");
+  return {
+    attestationFormat: "0.1",
+    subject: { server: String(r.target.serverInfo?.["name"] ?? r.target.description), version: r.target.serverInfo?.["version"] as string | undefined, transport: r.target.transport, target: r.target.description, toolsFingerprint: r.target.toolsFingerprint, toolCount: r.target.toolCount },
+    claims: { trustGrade: r.grade ?? null, readinessGrade: r.readiness?.grade ?? null, trustScore: r.scores.overall, readinessScore: r.readiness?.score ?? null,
+      evidence: { responds, conformant, safeByDefault, agentReady: safeByDefault && (r.readiness?.score ?? 0) >= 90 }, assuranceLevel: r.assuranceLevel ?? "L1" },
+    checkedAt: r.run.startedAt, checkedWith: `Saktum Check ${r.tool.version}`, resultDigest: sha256Tag(canonicalize(r)),
+    note: "Self-tested (L1) unless stated otherwise: the signature proves the attestation was not changed, not that the run was independent. Valid for the tools matching toolsFingerprint."
+  };
 }

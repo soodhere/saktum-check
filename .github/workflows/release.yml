@@ -29,6 +29,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm bundle
+      - name: SBOM (CycloneDX) for the bundled dependencies
+        run: node scripts/sbom.mjs dist-bundle/saktum.sbom.cdx.json
       - name: Smoke-test the bundle from an empty directory
         run: |
           mkdir /tmp/smoke && cp dist-bundle/saktum.mjs /tmp/smoke/ && cd /tmp/smoke
@@ -38,9 +40,9 @@ jobs:
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist-bundle/saktum.mjs dist-bundle/saktum.mjs.sha256 --clobber
+            gh release upload "$TAG" dist-bundle/saktum.mjs dist-bundle/saktum.mjs.sha256 dist-bundle/saktum.sbom.cdx.json --clobber
           else
-            gh release create "$TAG" dist-bundle/saktum.mjs dist-bundle/saktum.mjs.sha256 --target "$GITHUB_SHA" \
+            gh release create "$TAG" dist-bundle/saktum.mjs dist-bundle/saktum.mjs.sha256 dist-bundle/saktum.sbom.cdx.json --target "$GITHUB_SHA" \
               --title "Saktum Check $TAG" --notes-file docs/QUICKSTART.md --prerelease
           fi
       - name: Publish to npm with provenance

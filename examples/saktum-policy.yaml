@@ -1,0 +1,18 @@
+# Example organisation policy for Saktum Check (format: contracts/policy.schema.json).
+# Use with: saktum check --policy, saktum scan-config --policy, saktum fleet --policy, or the Action's policy input.
+policyFormat: "0.1"
+name: Example Corp MCP policy v1
+minTrust: A                    # conformance, sign-in and security
+minReadiness: B                # annotations, descriptions, context cost
+noFailedSeverity: high         # no failed check at high or critical
+forbidCapabilities: [money, code-execution]
+forbidLethalTrifecta: true
+maxContextTokens: 20000
+requireAllowlist: false        # set true and point to an allowlist built with saktum allowlist
+# allowlist: saktum-allowlist.json
+exceptions:
+  - server: build-runner
+    rules: [forbidCapabilities]
+    reason: Runs builds in an isolated CI sandbox only
+    approvedBy: Security architecture
+    until: "2027-06-30"

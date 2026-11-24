@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/contracts/policy.schema.json",
+  "title": "Saktum policy",
+  "description": "An organisation's own rules for which MCP servers its people and agents may use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policyFormat"],
+  "properties": {
+    "policyFormat": { "const": "0.1" },
+    "name": { "type": "string", "maxLength": 120 },
+    "minTrust": { "enum": ["A", "B", "C", "D", "F"] },
+    "minReadiness": { "enum": ["A", "B", "C", "D", "F"] },
+    "forbidCapabilities": { "type": "array", "items": { "enum": ["reads-private-data", "untrusted-content", "network", "code-execution", "filesystem", "writes-or-deletes", "sends-messages", "money"] }, "uniqueItems": true },
+    "forbidLethalTrifecta": { "type": "boolean" },
+    "maxContextTokens": { "type": "integer", "minimum": 0 },
+    "noFailedSeverity": { "enum": ["critical", "high", "medium", "low"], "description": "Any failed check at or above this severity violates the policy" },
+    "requireAllowlist": { "type": "boolean", "description": "Every server must match an entry (by tool fingerprint) in the allowlist file" },
+    "allowlist": { "type": "string", "maxLength": 500, "description": "Path of a saktum allowlist file" },
+    "exceptions": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["server", "reason"],
+      "properties": { "server": { "type": "string", "maxLength": 200 }, "rules": { "type": "array", "items": { "type": "string" } }, "reason": { "type": "string", "minLength": 3, "maxLength": 300 }, "approvedBy": { "type": "string", "maxLength": 120 }, "until": { "type": "string", "format": "date" } } } }
+  }
+}

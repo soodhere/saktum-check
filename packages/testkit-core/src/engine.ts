@@ -11,7 +11,7 @@ import { sanitizeText } from "./safe.js";
 import { score, TRUST_WEIGHTS } from "./scoring.js";
 import type { Finding, LoadedPack, Result } from "./types.js";
 
-export const ENGINE_VERSION = "0.3.2";
+export const ENGINE_VERSION = "0.4.0";
 export const UNKNOWN_TOOL = "saktum_trust_check_no_such_tool";
 const INVALID_TOKEN = "saktum-check-deliberately-invalid-token";
 
@@ -29,6 +29,8 @@ export interface RunOptions {
   testCases?: TestCase[];
   /** v0.2: checks to ignore, each with a reason shown in the report. */
   ignore?: { check: string; reason: string }[];
+  /** v0.4: receives the listed tools (for scan-config's cross-server analysis), so servers are started only once. */
+  onTools?: (tools: ToolDef[]) => void;
 }
 
 /** Connection problems (nothing answered) are not findings; protocol problems (something answered wrongly) are. */
@@ -128,7 +130,7 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
     if (session) {
       ctx.perf!.initMs = session.initMs;
       const t0 = Date.now();
-      try { ctx.tools = await session.listTools(); } catch (e) { listError = (e as Error).message; listShape = e instanceof ShapeError; }
+      try { ctx.tools = await session.listTools(); opts.onTools?.(ctx.tools); } catch (e) { listError = (e as Error).message; listShape = e instanceof ShapeError; }
       ctx.perf!.listMs = Date.now() - t0;
       ctx.perf!.listBytes = JSON.stringify(ctx.tools).length;
       ctx.probes!.unknownTool = await session.callTool(UNKNOWN_TOOL, {});

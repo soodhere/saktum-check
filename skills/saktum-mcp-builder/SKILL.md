@@ -1,0 +1,35 @@
+---
+name: saktum-mcp-builder
+description: Use when building, changing or reviewing an MCP server (tools for AI agents) in TypeScript or Python. Applies the practices Saktum Check tests: annotations, short descriptions, output schemas, input validation, test cases, linting and breaking-change checks before release.
+---
+
+# Building trustworthy MCP servers
+
+## Building this MCP server (rules for coding agents)
+
+Follow these whenever you add or change a tool. They are what Saktum Check tests.
+
+1. **Annotate every tool**: `readOnlyHint` (true if it only reads), `destructiveHint` (true if it deletes or overwrites),
+   `idempotentHint` and `openWorldHint` (true if it reaches outside systems). Clients use them to ask before risky actions.
+2. **Describe every tool in one or two plain sentences**: what it does and when to use it. Never put instructions to the
+   agent in descriptions (no "ignore", "do not tell the user", hidden or invisible text).
+3. **Name tools** with 1 to 64 letters, digits, underscores or hyphens, starting with a verb (`get_order`, `create_invoice`).
+4. **Declare an output schema** and return matching `structuredContent` as well as text content.
+5. **Validate inputs** against the input schema and return a short error result for bad input; never crash, hang, or put
+   stack traces, file paths or secrets in errors.
+6. **Keep tool definitions short**: every token is paid on every agent turn.
+7. **Test**: add a happy-path and an error-path case to `saktum.tests.yaml` for each tool (`npx saktum call <tool> --args '{...}' --save-test <id>`
+   records one from a real call), then run `npx saktum test -- <start command>` and `npx saktum lint` before committing.
+8. **Before releasing a change**, run `npx saktum diff saktum.lock.json -- <start command>` and bump the version it suggests;
+   then refresh the lock with `npx saktum snapshot -- <start command>`.
+
+## Commands
+
+- New server: `npx saktum init my-server --lang ts` (or `--lang py`)
+- Static checks: `npx saktum lint`
+- Missing annotations as code: `npx saktum fix -- <start command>`
+- Full check: `npx saktum check -- <start command>` (add `--active` only for servers the user owns)
+- Save a call as a test: `npx saktum call <tool> --args '{...}' --save-test <id> -- <start command>`
+- Before release: `npx saktum diff saktum.lock.json -- <start command>`
+
+If the Saktum MCP server is available (`npx -y saktum mcp`), use its tools (check_server, suggest_annotations, diff_against_lock) instead of the commands.

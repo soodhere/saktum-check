@@ -1,0 +1,29 @@
+{
+  "mandateFormat": "0.1",
+  "agent": {
+    "id": "did:key:z6MkqqmUxW6n27fs1JGRFWoJTp4sgXQvYfHAaw47Bz2pJwt8",
+    "name": "Billing assistant"
+  },
+  "owner": {
+    "id": "did:key:z6Mkou17XpEtrPhBoTKjXoFM3VTzH9DaYXEGuHcQXPHWY2QL",
+    "name": "Finance operations"
+  },
+  "purpose": "Answer billing questions; never change records",
+  "allow": {
+    "servers": [
+      "billing-mcp"
+    ],
+    "tools": [
+      "get_invoice",
+      "list_invoices"
+    ],
+    "destructive": false
+  },
+  "issuedAt": "2026-11-23T19:17:38.209Z",
+  "expires": "2027-03-31",
+  "signature": {
+    "alg": "EdDSA",
+    "kid": "did:key:z6Mkou17XpEtrPhBoTKjXoFM3VTzH9DaYXEGuHcQXPHWY2QL",
+    "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa291MTdYcEV0clBoQm9US2pYb0ZNM1ZUekg5RGFZWEVHdUhjUVhQSFdZMlFMIn0..JWgZlml3CFdifVv3NlftSsJqCLZ282PLh4mzuf0aimvaRR8Qkhao6xuxGj5u5neXKXwT4Kea85GNG98jiq5GAw"
+  }
+}

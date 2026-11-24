@@ -5,13 +5,13 @@ import { root } from "./helpers.js";
 
 describe("contracts", () => {
   it("every contract compiles and every example validates", () => {
-    const pairs: [string, string][] = [["pack.example.json", "pack.schema.json"], ["test-cases.example.json", "test-cases.schema.json"], ["envelope.example.json", "envelope.schema.json"]];
+    const pairs: [string, string][] = [["pack.example.json", "pack.schema.json"], ["test-cases.example.json", "test-cases.schema.json"], ["envelope.example.json", "envelope.schema.json"], ["policy.example.json", "policy.schema.json"], ["mandate.example.json", "mandate.schema.json"]];
     for (const [ex, schema] of pairs) {
       const v = compileContract(schema);
       const ok = v(JSON.parse(readFileSync(contractsDir + "examples/" + ex, "utf8")));
       expect(ok, `${ex}: ${JSON.stringify(v.errors)}`).toBe(true);
     }
-    expect(readdirSync(contractsDir).filter((f) => f.endsWith(".schema.json")).length).toBe(5);
+    expect(readdirSync(contractsDir).filter((f) => f.endsWith(".schema.json")).length).toBe(7);
   });
   it("all bundled packs validate against the pack contract", () => {
     const packs = loadPackDir(root + "packs");

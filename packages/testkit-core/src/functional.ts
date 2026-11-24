@@ -187,3 +187,15 @@ export async function parseTestCases(text: string): Promise<TestCase[]> {
   if (!validate(data)) throw new Error(`Invalid test cases: ${(validate.errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message}`).join("; ")}`);
   return (data as { tests: TestCase[] }).tests;
 }
+
+/** Append a test case to saktum.tests.yaml text (or start a new file), keeping existing comments and formatting. */
+export async function appendTestCase(existing: string | undefined, tc: TestCase): Promise<string> {
+  const { parseDocument, stringify } = await import("yaml");
+  if (!existing || !existing.trim()) return `# Test cases (guide: docs/TESTS.md)\n${stringify({ testsFormat: "0.1", tests: [tc] })}`;
+  const doc = parseDocument(existing);
+  const tests = doc.get("tests") as { items?: unknown[]; add: (n: unknown) => void } | undefined;
+  if (!tests || typeof tests.add !== "function") throw new Error("The test file has no tests list.");
+  if (((doc.toJS() as { tests: { id: string }[] }).tests ?? []).some((t) => t.id === tc.id)) throw new Error(`A test case with id ${tc.id} already exists.`);
+  tests.add(doc.createNode(tc));
+  return String(doc);
+}

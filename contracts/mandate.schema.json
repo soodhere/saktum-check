@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/contracts/mandate.schema.json",
+  "title": "Saktum agent mandate",
+  "description": "An agent's identity and what its human owner allows it to do, signed by the owner.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mandateFormat", "agent", "owner", "allow", "issuedAt", "expires", "signature"],
+  "properties": {
+    "mandateFormat": { "const": "0.1" },
+    "agent": { "type": "object", "additionalProperties": false, "required": ["id", "name"], "properties": { "id": { "type": "string", "pattern": "^did:key:" }, "name": { "type": "string", "maxLength": 120 } } },
+    "owner": { "type": "object", "additionalProperties": false, "required": ["id"], "properties": { "id": { "type": "string", "pattern": "^did:key:" }, "name": { "type": "string", "maxLength": 120 } } },
+    "purpose": { "type": "string", "maxLength": 300 },
+    "allow": { "type": "object", "additionalProperties": false, "required": ["destructive"], "properties": {
+      "servers": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+      "tools": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+      "destructive": { "type": "boolean" } } },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "expires": { "type": "string", "format": "date" },
+    "signature": { "type": "object", "required": ["alg", "kid", "jws"], "properties": { "alg": { "const": "EdDSA" }, "kid": { "type": "string" }, "jws": { "type": "string" } } }
+  }
+}

@@ -26,7 +26,7 @@ export function contractText(f: string): string {
   if (!t) throw new Error(`contract ${f} not found`);
   return t;
 }
-for (const f of ["envelope.schema.json", "receipt.schema.json", "pack.schema.json", "result.schema.json", "test-cases.schema.json"]) {
+for (const f of ["envelope.schema.json", "receipt.schema.json", "pack.schema.json", "result.schema.json", "test-cases.schema.json", "policy.schema.json", "mandate.schema.json"]) {
   ajv.addSchema(JSON.parse(contractText(f)), f);
 }
 

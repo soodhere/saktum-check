@@ -237,3 +237,22 @@ ${tests ? `<h2>4. Provider test cases</h2><ul>${tests}</ul>` : ""}
 </body></html>
 `;
 }
+
+/** SARIF 2.1.0 for GitHub code scanning: one rule per check, results for failed checks, anchored to a file you choose. */
+export function toSarif(r: Result, anchor = "package.json", accepted: Set<string> = new Set()): Record<string, unknown> {
+  const level = (s: string) => (s === "critical" || s === "high" ? "error" : s === "medium" ? "warning" : "note");
+  const secSev = (s: string) => ({ critical: "9.5", high: "8.0", medium: "5.5", low: "3.0" } as Record<string, string>)[s] ?? "1.0";
+  const fails = r.findings.filter((f) => f.status === "fail" && !f.suppressed);
+  const ruleIds = [...new Set(fails.map((f) => f.check))];
+  return {
+    $schema: "https://json.schemastore.org/sarif-2.1.0.json", version: "2.1.0",
+    runs: [{
+      tool: { driver: { name: "Saktum Check", version: r.tool.version, informationUri: "https://github.com/soodhere/saktum-check",
+        rules: ruleIds.map((id) => { const f = fails.find((x) => x.check === id)!; return { id, name: id, shortDescription: { text: f.title }, fullDescription: { text: f.fix ?? f.title }, helpUri: "https://github.com/soodhere/saktum-check/blob/main/docs/CHECKS.md", properties: { tags: ["mcp", "security", f.pack], "security-severity": secSev(f.severity) } }; }) } },
+      results: fails.map((f) => ({ ruleId: f.check, level: level(f.severity), message: { text: `${f.title}: ${sanitizeText(f.message ?? "", 800)}${f.fix ? ` Fix: ${f.fix}` : ""}` },
+        locations: [{ physicalLocation: { artifactLocation: { uri: anchor }, region: { startLine: 1 } } }],
+        partialFingerprints: { saktumCheck: `${f.check}:${f.subject ?? ""}` },
+        ...(accepted.has(`${f.check}:${f.subject ?? ""}`) ? { baselineState: "unchanged" } : { baselineState: "new" }) }))
+    }]
+  };
+}

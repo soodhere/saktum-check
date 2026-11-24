@@ -1,0 +1,25 @@
+{
+  "policyFormat": "0.1",
+  "name": "Example Corp MCP policy v1",
+  "minTrust": "A",
+  "minReadiness": "B",
+  "noFailedSeverity": "high",
+  "forbidCapabilities": [
+    "money",
+    "code-execution"
+  ],
+  "forbidLethalTrifecta": true,
+  "maxContextTokens": 20000,
+  "requireAllowlist": false,
+  "exceptions": [
+    {
+      "server": "build-runner",
+      "rules": [
+        "forbidCapabilities"
+      ],
+      "reason": "Runs builds in an isolated CI sandbox only",
+      "approvedBy": "Security architecture",
+      "until": "2027-06-30"
+    }
+  ]
+}

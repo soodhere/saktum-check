@@ -119,3 +119,25 @@ fix (annotation suggestions as TS/Python code, conflicts), snapshot/diff (tool l
 semver advice, CI exit code), docs (tools table, client configuration), packet (security packet from a verified signed
 result; provider statements marked unverified), sec.http.origin (local HTTP servers must refuse foreign origins: DNS
 rebinding), ax.client-compat (informational), negotiated protocol version recorded. 108 tests.
+
+## v0.4.0 (24 Nov 2026): agents, set-ups and CI
+saktum mcp (Saktum as an MCP server; dogfood trust A, readiness A, functional 4/4), attest (signed attestation from a
+verified result; L1 to L4 evidence only), scan-config (client configurations; consent; secrets never printed; total
+cost, duplicates, look-alike tools, allowlist), SARIF 2.1.0 and baseline (fail only on new findings), Action inputs
+sarif and baseline, server.json for the official MCP Registry. 122 tests.
+Shift left (also v0.4.0): init (TS with the MCP SDK and zod; Python pinned to mcp<2, since the v2 SDK renamed FastMCP to
+MCPServer; both templates validated end to end at trust A, readiness A, functional 6/6), lint (only files importing an
+MCP SDK; file and line; SARIF), call --save-test, check --watch, skill pack (skills/, agents/).
+First run (also v0.4.0): `saktum` with no command shows four journeys; README "Start here"; website install buttons
+(Cursor and VS Code links, Claude Code command). Feature freeze after v0.4.0 until census v2 and update 3. 126 tests.
+Enterprise (also v0.4.0): policy as code (contracts/policy.schema.json; --policy on check, scan-config and the Action;
+exceptions with reason, approver and expiry), saktum fleet (organisation inventory from many scan-config outputs; command
+lines redacted), CycloneDX SBOM attached to every release (scripts/sbom.mjs), docs/ENTERPRISE.md with the MCP Trust Pilot.
+133 tests.
+Trust ledger (also v0.4.0): Certificate Transparency for MCP servers. ledger.ts (append-only, hash-chained, signature-
+verified; tamper-evident), CLI ledger verify/find/append, attest --publish (pre-filled issue link), allowlist
+--from-ledger --trusted-signers; the bot lives in saktum-index (.github/workflows/ledger.yml; never runs anyone's code).
+Agent governance preview (also v0.4.0): agentid.ts (mandate contract: did:key agent, owner-signed scope and expiry),
+receipts.ts (receipt-contract instances signed by the agent side, hash-chained; path summary with retry storms), proxy.ts
+(stdio relay: observe or --enforce; arguments stored as digests). Real run: memory server, read-only mandate, write
+blocked, receipts verified. 143 tests. Next for this line: bilateral receipts and HTTP in the gateway.
