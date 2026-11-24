@@ -56,7 +56,10 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
     }
     child.stdin.write(line + "\n");
   });
-  process.stdin.on("end", () => child.stdin.end());
+  // When the agent disconnects, close the server's input and, if it has not exited within two seconds, stop it, so no
+  // server process is ever left running behind the proxy (some servers do not exit when their input closes).
+  process.stdin.on("end", () => { child.stdin.end(); setTimeout(() => { if (child.exitCode === null) child.kill("SIGTERM"); }, 2000).unref(); });
+  for (const sig of ["SIGINT", "SIGTERM"] as const) process.once(sig, () => { if (child.exitCode === null) child.kill("SIGTERM"); });
 
   // Server -> agent
   createInterface({ input: child.stdout! }).on("line", (line) => {
