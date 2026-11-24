@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "name": "io.github.soodhere/saktum-check",
   "title": "Saktum Check",
-  "description": "Test MCP servers: trust grades, OWASP MCP Top 10 checks, annotation fixes, breaking-change diffs and docs.",
+  "description": "Test and govern MCP servers: trust grades, OWASP MCP Top 10 checks, fixes and signed receipts.",
   "repository": { "url": "https://github.com/soodhere/saktum-check", "source": "github" },
   "version": "0.4.0",
   "packages": [
