@@ -3,15 +3,25 @@
   "name": "io.github.soodhere/saktum-check",
   "title": "Saktum Check",
   "description": "Test and govern MCP servers: trust grades, OWASP MCP Top 10 checks, fixes and signed receipts.",
-  "repository": { "url": "https://github.com/soodhere/saktum-check", "source": "github" },
-  "version": "0.4.0",
+  "repository": {
+    "url": "https://github.com/soodhere/saktum-check",
+    "source": "github"
+  },
+  "version": "0.4.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "saktum",
-      "version": "0.4.0",
-      "transport": { "type": "stdio" },
-      "packageArguments": [{ "type": "positional", "value": "mcp" }]
+      "version": "0.4.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
     }
   ]
 }

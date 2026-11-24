@@ -1,0 +1,335 @@
+{
+ "generatedAt": "2026-11-24T00:20:35.262Z",
+ "method": "Saktum Check 0.2 (passive: no tool is called; install scripts disabled), npm registry metadata",
+ "broad": {
+  "discovered": 2500,
+  "npmTaggedMcpServer": 12589,
+  "scanned": 520,
+  "runnable": 473,
+  "usesMcpSdk": 56.7,
+  "provenance": 56.5,
+  "installScripts": 9.2,
+  "noRepository": 6.7,
+  "noLicence": 0.8,
+  "weeklyDownloadsCovered": 4681723
+ },
+ "deep": {
+  "attempted": 52,
+  "assessed": 28,
+  "couldNotStart": 23,
+  "noGrade": 1,
+  "weeklyDownloadsAssessed": 272691,
+  "maturity": [
+   {
+    "level": 1,
+    "atLeast": 28
+   },
+   {
+    "level": 2,
+    "atLeast": 26
+   },
+   {
+    "level": 3,
+    "atLeast": 26
+   },
+   {
+    "level": 4,
+    "atLeast": 10
+   },
+   {
+    "level": 5,
+    "atLeast": 5
+   }
+  ],
+  "levelExactly": [
+   {
+    "level": 1,
+    "count": 2
+   },
+   {
+    "level": 2,
+    "count": 0
+   },
+   {
+    "level": 3,
+    "count": 16
+   },
+   {
+    "level": 4,
+    "count": 5
+   },
+   {
+    "level": 5,
+    "count": 5
+   }
+  ],
+  "quadrants": [
+   {
+    "quadrant": "Leaders",
+    "count": 10
+   },
+   {
+    "quadrant": "Safe but hard for agents",
+    "count": 18
+   },
+   {
+    "quadrant": "Agent-friendly but risky",
+    "count": 0
+   },
+   {
+    "quadrant": "Not ready",
+    "count": 0
+   }
+  ],
+  "points": [
+   {
+    "x": 100,
+    "y": 65,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 4
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 5
+   },
+   {
+    "x": 100,
+    "y": 50,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 97,
+    "level": 5
+   },
+   {
+    "x": 100,
+    "y": 45,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 5
+   },
+   {
+    "x": 91,
+    "y": 70,
+    "level": 1
+   },
+   {
+    "x": 100,
+    "y": 72,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 5
+   },
+   {
+    "x": 100,
+    "y": 54,
+    "level": 3
+   },
+   {
+    "x": 91,
+    "y": 62,
+    "level": 1
+   },
+   {
+    "x": 100,
+    "y": 61,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 94,
+    "level": 4
+   },
+   {
+    "x": 100,
+    "y": 58,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 46,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 4
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 4
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 5
+   },
+   {
+    "x": 100,
+    "y": 70,
+    "level": 3
+   },
+   {
+    "x": 100,
+    "y": 100,
+    "level": 4
+   }
+  ],
+  "noAnnotations": 50,
+  "partialAnnotations": 14.3,
+  "readinessA": 35.7,
+  "tokensMedian": 4860,
+  "tokensP90": 53765,
+  "over20k": 7,
+  "toolsMedian": 27,
+  "toolsMax": 451,
+  "capabilities": [
+   {
+    "capability": "code-execution",
+    "count": 2,
+    "pct": 7.1
+   },
+   {
+    "capability": "network",
+    "count": 13,
+    "pct": 46.4
+   },
+   {
+    "capability": "filesystem",
+    "count": 3,
+    "pct": 10.7
+   },
+   {
+    "capability": "writes-or-deletes",
+    "count": 21,
+    "pct": 75
+   },
+   {
+    "capability": "sends-messages",
+    "count": 0,
+    "pct": 0
+   },
+   {
+    "capability": "money",
+    "count": 1,
+    "pct": 3.6
+   },
+   {
+    "capability": "reads-private-data",
+    "count": 1,
+    "pct": 3.6
+   },
+   {
+    "capability": "untrusted-content",
+    "count": 1,
+    "pct": 3.6
+   }
+  ],
+  "trifecta": 0,
+  "failingChecks": [
+   {
+    "check": "conf.tools.unknown-not-success",
+    "count": 1,
+    "pct": 3.6
+   },
+   {
+    "check": "conf.tools.schema-valid",
+    "count": 1,
+    "pct": 3.6
+   }
+  ],
+  "trustA": 100,
+  "deepProvenance": 57.1,
+  "byKind": [
+   {
+    "kind": "npm",
+    "assessed": 28
+   },
+   {
+    "kind": "pypi",
+    "assessed": 0
+   }
+  ]
+ },
+ "remote": {
+  "attempted": 50,
+  "reached": 49,
+  "sseOnly": 0,
+  "unreachable": 1,
+  "requireSignIn": 14,
+  "public": 32,
+  "signIn": {
+   "challenge": 14,
+   "resourceMetadata": 12,
+   "serverMetadataPkce": 14,
+   "rejectsInvalidToken": 14,
+   "fullDiscovery": 12,
+   "fullDiscoveryPct": 85.7
+  },
+  "publicGraded": 32,
+  "publicTrustA": 32
+ },
+ "protocolVersions": [
+  {
+   "version": "2025-11-25",
+   "count": 53
+  },
+  {
+   "version": "unknown",
+   "count": 15
+  },
+  {
+   "version": "2025-06-18",
+   "count": 9
+  }
+ ],
+ "edition": "December 2026 (dry run)"
+}

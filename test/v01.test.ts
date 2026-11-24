@@ -64,7 +64,7 @@ describe("secrets and leakage", () => {
     const sec = find(r, "sec.secrets.exposed");
     expect(sec.status).toBe("fail");
     expect(sec.message).toMatch(/AWS access key/);
-    expect(JSON.stringify(r)).not.toContain("AKIAIOSFODNN7EXAMPLE");
+    expect(JSON.stringify(r)).not.toContain("AKIA" + "Q7WERTYUIOP12345");
     expect(sec.evidence?.excerpt).toMatch(/redacted/);
     const leak = find(r, "sec.errors.leakage");
     expect(leak.status).toBe("fail");

@@ -1,0 +1,33 @@
+{
+  "attestationFormat": "0.1",
+  "subject": {
+    "server": "memory-server",
+    "version": "2.2.1",
+    "transport": "stdio",
+    "target": "npx -y @modelcontextprotocol/server-memory",
+    "toolsFingerprint": "sha256:c2ad5ee076135ea33d8da5f638a9d895906376a0f773a0fe87649cf53e907d6a",
+    "toolCount": 9
+  },
+  "claims": {
+    "trustGrade": "A",
+    "readinessGrade": "A",
+    "trustScore": 100,
+    "readinessScore": 100,
+    "evidence": {
+      "responds": true,
+      "conformant": true,
+      "safeByDefault": true,
+      "agentReady": true
+    },
+    "assuranceLevel": "L1"
+  },
+  "checkedAt": "2026-11-24T00:41:04.297Z",
+  "checkedWith": "Saktum Check 0.4.0",
+  "resultDigest": "sha256:9651446b7def778a272e03b3be359838f841a2635e2c5e2e8eba54a09a803e06",
+  "note": "Self-tested (L1) unless stated otherwise: the signature proves the attestation was not changed, not that the run was independent. Valid for the tools matching toolsFingerprint.",
+  "signature": {
+    "alg": "EdDSA",
+    "kid": "did:key:z6MkhjZbdxrJYBMJczLx1WUXXuSTbFifUpHD3n3Qfv5DVBnX",
+    "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa2hqWmJkeHJKWUJNSmN6THgxV1VYWHVTVGJGaWZVcEhEM24zUWZ2NURWQm5YIn0..NgkNxk6eNk1Qo6QwHXPgGdD9o5sIF4s8Ag8-wua1KyVfURb2vXxBYM0bQpNIPoaVfsb8ITfefExWOXI9mb-IBw"
+  }
+}

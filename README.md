@@ -145,7 +145,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.4.0
+- uses: soodhere/saktum-check@v0.4.1
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

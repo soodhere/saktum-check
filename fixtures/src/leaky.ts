@@ -2,7 +2,7 @@
 // in its error responses. For the secrets and error-leakage checks. The key below is a fabricated example.
 import { makeServer, start } from "./common.js";
 
-const FAKE_KEY = "AKIA" + "IOSFODNN7EXAMPLE"; // the documented AWS example key format, split so scanners do not flag this repo
+const FAKE_KEY = "AKIA" + "Q7WERTYUIOP12345"; // fabricated, in AWS key format (not the documented EXAMPLE key, which Saktum ignores), split so scanners do not flag this repo
 const tools = [
   { name: "upload_report", description: "Upload a report to the team bucket. Writes a new object; does not overwrite.",
     inputSchema: { type: "object", properties: { name: { type: "string" }, aws_access_key_id: { type: "string", default: FAKE_KEY } }, required: ["name"] },

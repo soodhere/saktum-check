@@ -6,8 +6,10 @@ import type { Analyser, AnalyserContext } from "./analysers.js";
 import { sanitizeText } from "./safe.js";
 
 /** Specific, low-false-positive secret formats. Test keys (for example sk_test_) are deliberately not flagged. */
-export const SECRET_PATTERNS: { name: string; re: RegExp }[] = [
-  { name: "AWS access key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
+/** `valid` rejects look-alikes found in real servers' documentation (census reviews, Nov and Dec 2026):
+ *  AWS's documented example keys (ending in EXAMPLE), and "password:" followed by a plain word rather than a value. */
+export const SECRET_PATTERNS: { name: string; re: RegExp; valid?: (m: RegExpMatchArray) => boolean }[] = [
+  { name: "AWS access key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, valid: (m) => !/EXAMPLE$/.test(m[0]) },
   { name: "GitHub token", re: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/ },
   { name: "Slack token", re: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/ },
   { name: "Stripe live key", re: /\b(?:sk|rk)_live_[0-9a-zA-Z]{20,}\b/ },
@@ -15,7 +17,8 @@ export const SECRET_PATTERNS: { name: string; re: RegExp }[] = [
   { name: "AI provider key", re: /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}\b/ },
   { name: "private key", re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----/ },
   { name: "JSON Web Token", re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/ },
-  { name: "password or secret assignment", re: /\b(?:password|passwd|client_secret|api_secret|secret_key)\b["']?\s*[:=]\s*["']?(?!\{|\$|<|%|x{4})[^\s"',;]{8,}/i }
+  { name: "password or secret assignment", re: /\b(?:password|passwd|client_secret|api_secret|secret_key)\b["']?\s*[:=]\s*["']?(?!\{|\$|<|%|x{4})([^\s"',;]{8,})/i,
+    valid: (m) => { const v = (m[1] ?? "").replace(/[).,;:!?]+$/, ""); return v.length >= 8 && /[A-Za-z]/.test(v) && /\d/.test(v) && !/example|placeholder|changeme|your[-_]?|redacted/i.test(v); } }
 ];
 
 /** Signs of internal detail in error output: stack traces, file paths, database errors. */
@@ -52,8 +55,10 @@ function sources(ctx: AnalyserContext): { where: string; text: string }[] {
 export const leakageAnalysers: Record<string, Analyser> = {
   secrets: (ctx) => {
     for (const s of sources(ctx)) for (const p of SECRET_PATTERNS) {
-      const m = s.text.match(p.re);
-      if (m) return { status: "fail", subject: s.where, message: `Found what looks like ${/^[aeiou]/i.test(p.name) ? "an" : "a"} ${p.name} in ${s.where}. Anyone who can list tools or trigger an error can read it.`, evidence: { excerpt: redact(s.text, m[0]) } };
+      // Check every match, so a harmless look-alike cannot hide a real secret later in the same text.
+      const all = new RegExp(p.re.source, p.re.flags.includes("g") ? p.re.flags : p.re.flags + "g");
+      for (const m of s.text.matchAll(all)) if (!p.valid || p.valid(m))
+        return { status: "fail", subject: s.where, message: `Found what looks like ${/^[aeiou]/i.test(p.name) ? "an" : "a"} ${p.name} in ${s.where}. Anyone who can list tools or trigger an error can read it.`, evidence: { excerpt: redact(s.text, m[0]) } };
     }
     return { status: "pass", message: "No secrets found in tool definitions or probe responses." };
   },
