@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
+import { passportSlug, renderAgentPassport, renderAssessment, renderLedgerPassport, renderPassportGallery, renderServerPassport, badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
 import { checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
@@ -408,6 +408,22 @@ export async function main(argv = process.argv): Promise<number> {
       if (!hits.length) process.stdout.write("No entries found.\n");
       for (const e of hits) process.stdout.write(`#${e.seq} ${sanitizeText(e.subject.server, 80)} ${sanitizeText(e.subject.version ?? "", 20)}  trust ${e.attestation.claims.trustGrade ?? "-"} \u00b7 readiness ${e.attestation.claims.readinessGrade ?? "-"} \u00b7 ${e.attestation.claims.assuranceLevel} \u00b7 checked ${e.attestation.checkedAt.slice(0, 10)} \u00b7 signed by ${e.signer.slice(0, 24)}\u2026\n`);
     });
+  ledger.command("pages")
+    .description("Generate public passport pages (one per server) and a gallery from a ledger (used by the ledger bot)")
+    .argument("[source]", "ledger file or https URL", DEFAULT_LEDGER_URL)
+    .option("--out <dir>", "output folder", "passports")
+    .action(async (src: string, o: { out: string }) => {
+      const entries = parseLedger(await readLedgerText(src));
+      const v = verifyLedger(entries);
+      if (!v.ok) throw new Error(`The ledger does not verify: ${v.errors[0]}`);
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(o.out, { recursive: true });
+      const latest = new Map<string, (typeof entries)[number]>();
+      for (const e of entries) latest.set(e.subject.server, e);
+      for (const e of latest.values()) writeFileSync(`${o.out}/${passportSlug(e.subject.server)}.html`, renderLedgerPassport(e as never));
+      writeFileSync(`${o.out}/index.html`, renderPassportGallery(entries as never));
+      process.stdout.write(`Wrote ${latest.size} passport page(s) and the gallery to ${sanitizeText(o.out)}.\n`);
+    });
   ledger.command("append")
     .description("Append a signed attestation to a ledger file after verifying it (used by the ledger bot)")
     .argument("<input>", "attestation JSON, or a text file (such as an issue body) containing it")
@@ -492,6 +508,57 @@ export async function main(argv = process.argv): Promise<number> {
         + s.byTool.map((t) => `  ${t.tool.padEnd(30)} ${t.count}`).join("\n") + "\n"
         + (s.repeatedIdenticalCalls.length ? `  Repeated identical calls (possible retry storms): ${s.repeatedIdenticalCalls.map((r) => `${r.call} \u00d7${r.times}`).join(", ")}\n` : "")
         + `  Order: ${s.order.join(" \u2192 ")}\n`);
+    });
+
+  program.command("passport")
+    .description("A visual passport: for an MCP server (checks it first) or, with --agent, for an agent (mandate and receipt timeline)")
+    .argument("[target...]", "the server: https URL, or -- <command that starts it>")
+    .option("--agent <mandate>", "make an Agent Passport from this mandate instead")
+    .option("--receipts <file>", "with --agent: the agent's receipt log, for the timeline")
+    .option("--out <file>", "HTML file", "saktum-passport.html")
+    .option("--key <path>", "signing key for the server's result")
+    .option("--env <KEY=VALUE>", "environment variable for a local server (repeatable)", collect, [] as string[])
+    .option("--header <Name: value>", "HTTP header for a remote server (repeatable)", collect, [] as string[])
+    .action(async (parts: string[], o: { agent?: string; receipts?: string; out: string; key?: string; env: string[]; header: string[] }) => {
+      if (o.agent) {
+        const m = JSON.parse(readFileSync(o.agent, "utf8")) as Mandate;
+        const valid = checkMandate(m);
+        let receipts;
+        if (o.receipts) {
+          const entries = parseReceiptLog(readFileSync(o.receipts, "utf8"));
+          const counts = new Map<string, number>();
+          for (const e of entries) { const k = `${e.receipt.envelope.tool}|${e.receipt.envelope.argumentsHash}`; counts.set(k, (counts.get(k) ?? 0) + 1); }
+          receipts = { verified: verifyReceiptLog(entries).ok, summary: summariseReceipts(entries),
+            timeline: entries.map((e) => ({ tool: e.receipt.envelope.tool, outcome: e.receipt.outcome, status: e.result.status, repeated: (counts.get(`${e.receipt.envelope.tool}|${e.receipt.envelope.argumentsHash}`) ?? 0) >= 3 })) };
+        }
+        writeFileSync(o.out, renderAgentPassport(m, valid.ok ? { ok: true } : { ok: false, reason: valid.reason }, receipts));
+        process.stdout.write(`Wrote the Agent Passport for ${sanitizeText(m.agent.name, 80)} to ${sanitizeText(o.out)}. Open it in a browser.\n`);
+        return;
+      }
+      if (!parts.length) throw new Error("Give a server (an https URL, or -- <command>), or use --agent <mandate>.");
+      const target = parseTarget(parts);
+      if (target.kind === "stdio" && o.env.length) target.env = parseEnv(o.env);
+      if (target.kind === "streamable-http" && o.header.length) target.headers = parseHeaders(o.header);
+      const packs = existsSync(bundledPacks) ? loadPackDir(bundledPacks) : loadEmbeddedPacks();
+      let tools: never[] = [];
+      const r = await runTrustCheck(target, { packs, onTools: (t) => { tools = t as never[]; } });
+      const signed = signDocument(r, loadOrCreateKey(o.key)) as Result & { signature: { kid: string } };
+      writeFileSync(o.out, renderServerPassport(signed, tools));
+      writeFileSync(o.out.replace(/\.html?$/i, "") + ".json", JSON.stringify(signed, null, 2));
+      process.stdout.write(`Wrote the MCP Server Passport for ${sanitizeText(String(r.target.serverInfo?.["name"] ?? "server"), 80)} to ${sanitizeText(o.out)} (trust ${r.grade ?? "-"}, readiness ${r.readiness?.grade ?? "-"}), and its signed result beside it.\n`);
+    });
+
+  program.command("assess")
+    .description("An executive MCP Trust Assessment for an organisation, from a fleet inventory and agent receipts (pilot deliverable)")
+    .requiredOption("--fleet <file>", "inventory JSON from saktum fleet --out")
+    .option("--org <name>", "organisation name", "Your organisation")
+    .option("--receipts <file>", "an agent's receipt log (repeatable)", collect, [] as string[])
+    .option("--out <file>", "HTML report (print to PDF from a browser)", "saktum-assessment.html")
+    .action((o: { fleet: string; org: string; receipts: string[]; out: string }) => {
+      const fleet = JSON.parse(readFileSync(o.fleet, "utf8"));
+      const rec = o.receipts.map((f) => { const e = parseReceiptLog(readFileSync(f, "utf8")); return { agent: e[0]?.receipt.envelope.caller.agent?.slice(0, 32) ?? f, summary: summariseReceipts(e), verified: verifyReceiptLog(e).ok }; });
+      writeFileSync(o.out, renderAssessment(o.org, fleet, rec));
+      process.stdout.write(`Wrote the MCP Trust Assessment for ${sanitizeText(o.org, 80)} to ${sanitizeText(o.out)}: ${fleet.servers?.length ?? 0} servers, ${fleet.nonCompliant ?? 0} violating policy. Open it in a browser and print to PDF.\n`);
     });
 
   program.command("fleet")

@@ -60,7 +60,8 @@ took (including retries and blocked attempts) is on record, not reconstructed in
 
 ## 5. The MCP Trust Pilot
 
-A 4 to 6 week paid pilot with your security, AI governance or platform team:
+A 4 to 6 week paid pilot with your security, AI governance or platform team (playbook, proposal and letter of intent:
+[docs/PILOT.md](PILOT.md); the executive report comes from `saktum assess`):
 
 1. **Inventory:** every MCP server in use across a chosen group of teams, with grades, capabilities and context cost.
 2. **Policy:** a first organisation policy agreed with your security team, enforced in CI on your MCP repositories.

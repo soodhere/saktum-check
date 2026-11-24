@@ -256,3 +256,4 @@ export function toSarif(r: Result, anchor = "package.json", accepted: Set<string
     }]
   };
 }
+export * from "./passport.js";

@@ -82,6 +82,16 @@ with an honest error to the agent. Receipts follow Saktum's receipt contract and
 Preview limits: local (stdio) servers; receipts are signed by the agent side (bilateral receipts, co-signed by the
 server side, come with the Saktum gateway).
 
+## Passports: trust you can see
+
+```
+npx saktum passport -- npx -y your-mcp-server                                  # MCP Server Passport: identity, tools, trust, maturity
+npx saktum passport --agent agent-mandate.json --receipts receipts.jsonl      # Agent Passport: mandate and the path of its calls
+```
+
+Every server recorded in the trust ledger gets a public passport page and a place in the
+[passport gallery](https://soodhere.github.io/saktum-index/passports/).
+
 ## The trust ledger: Certificate Transparency for AI agent tools
 
 Providers publish signed attestations to a **public, append-only, hash-chained ledger**; anyone can verify every
@@ -145,7 +155,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.4.1
+- uses: soodhere/saktum-check@v0.5.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

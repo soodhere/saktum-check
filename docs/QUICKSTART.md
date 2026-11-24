@@ -21,6 +21,9 @@ npx saktum ledger verify                                        # verify the pub
 npx saktum agent create --name "My agent" --allow-tool get_order  # agent identity and a mandate you sign (preview)
 npx saktum proxy --mandate agent-mandate.json --enforce -- npx -y some-server   # signed receipts for every call
 npx saktum receipts summary                                     # the path: tools, order, retries, denials
+npx saktum passport -- npx -y some-server                       # a visual MCP Server Passport
+npx saktum passport --agent agent-mandate.json --receipts r.jsonl   # an Agent Passport with the call timeline
+npx saktum assess --fleet inventory.json --org "Acme"           # executive MCP Trust Assessment (pilots)
 npx saktum mcp                                                  # run Saktum as an MCP server for your coding agent
 npx saktum init my-server --lang ts                             # new server, trustworthy by default (or --lang py)
 npx saktum lint                                                 # static checks on tool definitions in your source
