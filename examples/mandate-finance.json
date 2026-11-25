@@ -1,0 +1,31 @@
+{
+  "purpose": "Month-end finance operations",
+  "actions": [
+    {
+      "cls": "communicate",
+      "autonomy": "act"
+    },
+    {
+      "cls": "pay",
+      "autonomy": "act"
+    }
+  ],
+  "rules": [
+    {
+      "field": "commerce.order.total",
+      "op": "max",
+      "value": 50000,
+      "label": "invoices up to $50,000"
+    }
+  ],
+  "dataSharing": [
+    {
+      "data": "internal",
+      "to": "Finance team"
+    },
+    {
+      "data": "confidential",
+      "to": "External Auditor"
+    }
+  ]
+}

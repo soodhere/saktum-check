@@ -34,6 +34,8 @@ export interface Result {
   coverage?: { trustChecksRun: number };
   /** v0.2: what the tools appear able to do (inferred, never scored). */
   capabilities?: { capabilities: { capability: string; label: string; tools: string[]; basis: "declared" | "inferred" }[]; lethalTrifecta: boolean; note: string };
+  /** v0.6.1: how much care this server needs (R0 public reads to R4 money or code), with reasons and the default requirement. */
+  riskTier?: { tier: "R0" | "R1" | "R2" | "R3" | "R4"; label: string; reasons: string[]; requirement: string };
   /** v0.2: which tools were called and how they behaved (active runs). */
   functional?: { ran: boolean; reason?: string; calledTools: string[]; notCalled: { tool: string; why: string }[]; calls: { tool: string; purpose: string; outcome: string; latencyMs: number; problems: string[] }[]; survived?: boolean };
   /** v0.2: latency percentiles and concurrency (active runs). */

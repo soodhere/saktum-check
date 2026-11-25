@@ -90,7 +90,7 @@ describe("transparency and control", () => {
   it("shows a trust card and the scope of the run in every report", async () => {
     const r = await runTrustCheck(fixture("good"), { packs, mode: "active" });
     const dims = trustCard(r).map((x) => x.dimension);
-    expect(dims).toEqual(["Security", "Conformance", "Sign-in", "Functional", "Performance", "Agent readiness", "Capabilities"]);
+    expect(dims).toEqual(["Security", "Conformance", "Sign-in", "Functional", "Performance", "Agent readiness", "Risk tier", "Capabilities"]);
     expect(scopeOfRun(r).join(" ")).toMatch(/checks ran/);
     const text = renderTerminal(r);
     for (const h of ["TRUST CARD", "FUNCTIONAL", "TOOLS CALLED", "SCOPE OF THIS RUN"]) expect(text).toContain(h);

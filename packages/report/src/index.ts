@@ -68,6 +68,7 @@ export function trustCard(r: Result): { dimension: string; mark: string; text: s
   if (r.load) rows.push({ dimension: "Performance", mark: r.load.levels.some((l) => l.errors) ? "!" : "\u2713", text: r.load.verdicts.join(" ") });
   else rows.push({ dimension: "Performance", mark: "-", text: `start-up and tool-list latency only${r.metrics.performance?.listMs !== undefined ? ` (${r.metrics.performance.listMs} ms)` : ""}; run with --active for latency percentiles and concurrency` });
   if (r.readiness) rows.push({ dimension: "Agent readiness", mark: r.readiness.grade ?? "-", text: r.readiness.topImprovement ? `${r.readiness.topImprovement}` : "annotations, descriptions and context cost all good" });
+  if (r.riskTier) rows.push({ dimension: "Risk tier", mark: r.riskTier.tier, text: `${r.riskTier.label}: ${r.riskTier.reasons.join("; ")}. Needs ${r.riskTier.requirement}.` });
   if (r.capabilities) {
     const caps = r.capabilities.capabilities.map((c) => c.label);
     rows.push({ dimension: "Capabilities", mark: r.capabilities.lethalTrifecta ? "!" : "i", text: caps.length ? `${caps.join("; ")}${r.capabilities.lethalTrifecta ? ". Warning: private data + untrusted content + outbound channel (the lethal trifecta); limit what agents can combine" : ""}` : "no notable capabilities inferred" });
@@ -106,6 +107,7 @@ export function renderTerminal(r: Result): string {
   }
   const fn = r.findings.filter((f) => (f.pack === "functional" || f.pack === "tests") && f.scored && !f.suppressed && (f.status === "pass" || f.status === "fail"));
   lines.push(`  FUNCTIONAL       ${fn.length ? `${fn.filter((f) => f.status === "pass").length} of ${fn.length} checks passed${r.functional?.calledTools.length ? ` \u00b7 ${r.functional.calledTools.length} tool${r.functional.calledTools.length === 1 ? "" : "s"} called` : ""}${r.tests?.length ? ` \u00b7 ${r.tests.length} test cases` : ""}` : "not tested (run with --active, or add test cases)"}`);
+  if (r.riskTier) lines.push(`  RISK             ${r.riskTier.tier}  (${r.riskTier.label}; needs ${r.riskTier.requirement})`);
   lines.push(`  ${COVERAGE_NOTE}`);
   for (const line of r.summary ?? []) lines.push(`  ${s(line, 300)}`);
   lines.push("");

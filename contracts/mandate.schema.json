@@ -5,18 +5,388 @@
   "description": "An agent's identity and what its human owner allows it to do, signed by the owner.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["mandateFormat", "agent", "owner", "allow", "issuedAt", "expires", "signature"],
+  "required": [
+    "mandateFormat",
+    "agent",
+    "owner",
+    "allow",
+    "issuedAt",
+    "expires",
+    "signature"
+  ],
   "properties": {
-    "mandateFormat": { "const": "0.1" },
-    "agent": { "type": "object", "additionalProperties": false, "required": ["id", "name"], "properties": { "id": { "type": "string", "pattern": "^did:key:" }, "name": { "type": "string", "maxLength": 120 } } },
-    "owner": { "type": "object", "additionalProperties": false, "required": ["id"], "properties": { "id": { "type": "string", "pattern": "^did:key:" }, "name": { "type": "string", "maxLength": 120 } } },
-    "purpose": { "type": "string", "maxLength": 300 },
-    "allow": { "type": "object", "additionalProperties": false, "required": ["destructive"], "properties": {
-      "servers": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
-      "tools": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
-      "destructive": { "type": "boolean" } } },
-    "issuedAt": { "type": "string", "format": "date-time" },
-    "expires": { "type": "string", "format": "date" },
-    "signature": { "type": "object", "required": ["alg", "kid", "jws"], "properties": { "alg": { "const": "EdDSA" }, "kid": { "type": "string" }, "jws": { "type": "string" } } }
+    "mandateFormat": {
+      "const": "0.1"
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:key:"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "software": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:key:"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    },
+    "purpose": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "allow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "destructive"
+      ],
+      "properties": {
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "destructive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires": {
+      "type": "string",
+      "format": "date"
+    },
+    "signature": {
+      "type": "object",
+      "required": [
+        "alg",
+        "kid",
+        "jws"
+      ],
+      "properties": {
+        "alg": {
+          "const": "EdDSA"
+        },
+        "kid": {
+          "type": "string"
+        },
+        "jws": {
+          "type": "string"
+        }
+      }
+    },
+    "autonomy": {
+      "enum": [
+        "notify",
+        "propose",
+        "act"
+      ],
+      "description": "notify: only alert the user; propose: suggest, the user approves; act: act within the limits"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tool",
+          "arg"
+        ],
+        "properties": {
+          "tool": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "arg": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "max": {
+            "type": "number"
+          },
+          "oneOf": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "callsPerDay": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalPerDay": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "arg",
+            "max"
+          ],
+          "properties": {
+            "arg": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "max": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "approveAbove": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arg",
+        "value"
+      ],
+      "properties": {
+        "arg": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "value": {
+          "type": "number"
+        }
+      }
+    },
+    "disclosures": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operator": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "incentives": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "dataUse": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    },
+    "delegation": {
+      "type": "boolean",
+      "description": "May the agent hand work to other agents (default false)"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cls",
+          "autonomy"
+        ],
+        "properties": {
+          "cls": {
+            "enum": [
+              "search",
+              "cart",
+              "substitute",
+              "pay",
+              "book",
+              "change",
+              "cancel",
+              "communicate",
+              "other"
+            ]
+          },
+          "autonomy": {
+            "enum": [
+              "notify",
+              "propose",
+              "act"
+            ]
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "op",
+          "value"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "pattern": "^[a-z]+(\\.[a-z_]+)+$"
+          },
+          "op": {
+            "enum": [
+              "max",
+              "min",
+              "eq",
+              "in",
+              "notIn"
+            ]
+          },
+          "value": {},
+          "label": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "preferences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "prefer"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "pattern": "^[a-z]+(\\.[a-z_]+)+$"
+          },
+          "prefer": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "substitution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "maxPriceChangePct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "neverFor": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          }
+        }
+      }
+    },
+    "upsell": {
+      "enum": [
+        "never",
+        "ask",
+        "allowed"
+      ]
+    },
+    "approvalTriggers": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "substitution",
+          "fee",
+          "upsell",
+          "sponsored",
+          "new-counterparty"
+        ]
+      }
+    },
+    "counterparties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "dataSharing": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "data",
+          "to"
+        ],
+        "properties": {
+          "data": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "to": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "operatorCountersign": {
+      "type": "object",
+      "description": "The operator's signed statement over the mandate digest (role, name, mandate, at, signature)"
+    }
   }
 }

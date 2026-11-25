@@ -155,3 +155,28 @@ restored from git history).
 watch (allowlist re-checks: changed tools, grade drops, unreachable; webhook; daily workflow template), receipts export
 --otel (OTLP/JSON, GenAI semconv execute_tool + saktum.* attributes), attest --vc and vc verify (W3C VC 2.0 as vc+jwt,
 EdDSA, did:key issuer), roi and the assessment business case (assumptions always shown). ADR 0012 interoperability. 157 tests.
+
+## v0.6.1 (26 Nov 2026): risk-aware trust, permissions, and the demo
+risk.ts (R0 to R4 from capabilities and annotations; shown with grades; policy maxRiskTier), mandate v0.2 (autonomy
+notify/propose/act, argument constraints, daily limits, approval threshold, disclosures, delegation off by default;
+contract updated), decideCall with reason codes enforced by the proxy before each call (money tools denied unless
+granted; daily usage from the receipt log, which records only governed values), agent risk tier, Agent Passport
+permissions table, ax.payments-idempotent (informational), `saktum demo` (built-in shop server, three mandates, signed
+receipts, passports). 162 tests.
+
+## v0.7.0 (26 Nov 2026): the trust model in code (supersedes the unreleased 0.6.1)
+vocab.ts (commerce and travel vocabularies; semantic bindings declared in tool _meta io.saktum/bindings and
+io.saktum/action, or inferred from argument names; action classes), mandate v0.3 (purpose, actions with autonomy,
+rules, preferences, substitution, upsell, approval triggers, counterparties, data sharing; contract updated),
+decideIntent with rationale (rules checked, preferences, flags) applied by the proxy after decideCall, describeMandate
+(plain language), passports with instructions and per-step reasons, `saktum agent create --intent`, `saktum bindings`,
+`saktum demo` (grocery and travel stories; autonomy story kept). Includes 0.6.1: risk tiers, permissions, reason codes.
+167 tests.
+v0.7.0 also closes the honest gaps: personal-data fields and enforced data sharing (data-not-permitted), operator
+countersignature (cosign; checkMandate ignores it; checkOperator verifies it against mandateDigest), revocation
+(agent revoke; proxy --revocations; code revoked), agent software, trust statement (track record, never a score), and
+the demo shows a hidden-instruction attack held by the mandate, data kept from a hotel partner and the stop button. 171 tests.
+v0.7.0 final additions (unreleased until now, so folded in): enterprise data classes (enterprise.data_class enforced
+through dataSharing like personal data), signed single-use approvals of exactly one action (approvalRequestId over
+mandate digest, tool and argument digest; agent approve; proxy --approvals; receipts record "approved by"), mandate
+digest normalised through JSON, finance demo story. All seven board questions (Snowflake ebook list) answered. 174 tests.

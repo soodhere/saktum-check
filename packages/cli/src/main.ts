@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { passportSlug, renderAgentPassport, renderAssessment, renderLedgerPassport, renderPassportGallery, renderServerPassport, badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { actionClass, bindingsFor, describeMandate, attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, approveAction, checkOperator, cosignMandate, revocationOf, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
@@ -38,6 +38,7 @@ export const WELCOME = `Saktum Check \u2014 make the tools AI agents use trustwo
 
 What would you like to do?
 
+  0. See it in 60 seconds        npx saktum demo
   1. Test an MCP server          npx saktum check -- npx -y some-mcp-server
                                  npx saktum check https://your-server.example/mcp
   2. Start a new MCP server      npx saktum init my-server --lang ts   (or --lang py)
@@ -454,25 +455,89 @@ export async function main(argv = process.argv): Promise<number> {
     .option("--allow-server <name>", "server the agent may use (repeatable; default: any)", collect, [] as string[])
     .option("--allow-tool <name>", "tool the agent may use (repeatable; default: any)", collect, [] as string[])
     .option("--allow-destructive", "allow tools declared destructive", false)
+    .option("--autonomy <level>", "notify (only alert), propose (suggest, the user approves) or act (within the limits)", "propose")
+    .option("--max <tool.arg=value>", "cap a numeric argument, for example checkout.amount=50 (repeatable)", collect, [] as string[])
+    .option("--allow-value <tool.arg=v1,v2>", "allowed values for an argument, for example checkout.currency=CAD (repeatable)", collect, [] as string[])
+    .option("--daily-calls <n>", "at most this many actions a day")
+    .option("--daily-total <arg=max>", "at most this total a day for an argument, for example amount=200")
+    .option("--approve-above <arg=value>", "ask the user above this value, for example amount=25")
+    .option("--operator <name>", "who operates the agent (disclosure)")
+    .option("--incentives <text>", "incentives that could influence the agent, for example sponsored products (disclosure)")
+    .option("--data-use <text>", "what the agent does with the user's data (disclosure)")
+    .option("--allow-delegation", "allow the agent to hand work to other agents", false)
+    .option("--software <name@version>", "the agent software that will act under this mandate")
+    .option("--intent <file>", "instructions as JSON: purpose, actions, rules, preferences, substitution, upsell, approvalTriggers, counterparties, dataSharing (see examples/mandate-grocery.json)")
     .option("--expires <date>", "last valid day, YYYY-MM-DD", new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10))
     .option("--out <file>", "mandate file", "agent-mandate.json")
     .option("--agent-key <file>", "where to keep the agent's own key", "agent-key.json")
     .option("--key <file>", "your (owner's) signing key")
-    .action((o: { name: string; purpose?: string; ownerName?: string; allowServer: string[]; allowTool: string[]; allowDestructive: boolean; expires: string; out: string; agentKey: string; key?: string }) => {
+    .action((o: { name: string; purpose?: string; ownerName?: string; allowServer: string[]; allowTool: string[]; allowDestructive: boolean; expires: string; out: string; agentKey: string; key?: string;
+      autonomy: string; max: string[]; allowValue: string[]; dailyCalls?: string; dailyTotal?: string; approveAbove?: string; operator?: string; incentives?: string; dataUse?: string; allowDelegation: boolean; intent?: string; software?: string }) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(o.expires)) throw new Error("--expires must be YYYY-MM-DD");
+      if (!["notify", "propose", "act"].includes(o.autonomy)) throw new Error("--autonomy must be notify, propose or act");
+      const ta = (x: string, flag: string) => { const m2 = /^([^.=]+)\.([^=]+)=(.+)$/.exec(x); if (!m2) throw new Error(`${flag} must look like tool.arg=value`); return { tool: m2[1]!, arg: m2[2]!, value: m2[3]! }; };
+      const av = (x: string, flag: string) => { const m2 = /^([^=]+)=(-?[\d.]+)$/.exec(x); if (!m2) throw new Error(`${flag} must look like arg=number`); return { arg: m2[1]!, value: Number(m2[2]) }; };
+      const constraints = [...o.max.map((x) => { const t = ta(x, "--max"); return { tool: t.tool, arg: t.arg, max: Number(t.value) }; }), ...o.allowValue.map((x) => { const t = ta(x, "--allow-value"); return { tool: t.tool, arg: t.arg, oneOf: t.value.split(",").map((v) => v.trim()) }; })];
+      const dt = o.dailyTotal ? av(o.dailyTotal, "--daily-total") : undefined, aa = o.approveAbove ? av(o.approveAbove, "--approve-above") : undefined;
       const agentKey = loadOrCreateKey(o.agentKey);
-      const m = createMandate({ agentId: agentKey.kid, agentName: o.name, ownerName: o.ownerName, purpose: o.purpose, servers: o.allowServer, tools: o.allowTool, destructive: o.allowDestructive, expires: o.expires }, loadOrCreateKey(o.key));
+      const m = createMandate({ agentId: agentKey.kid, agentName: o.name, ownerName: o.ownerName, purpose: o.purpose, servers: o.allowServer, tools: o.allowTool, destructive: o.allowDestructive, expires: o.expires,
+        autonomy: o.autonomy as "notify" | "propose" | "act", constraints, limits: { ...(o.dailyCalls ? { callsPerDay: Number(o.dailyCalls) } : {}), ...(dt ? { totalPerDay: { arg: dt.arg, max: dt.value } } : {}) },
+        approveAbove: aa, disclosures: { ...(o.operator ? { operator: o.operator } : {}), ...(o.incentives ? { incentives: o.incentives } : {}), ...(o.dataUse ? { dataUse: o.dataUse } : {}) }, delegation: o.allowDelegation,
+        ...(o.intent ? (JSON.parse(readFileSync(o.intent, "utf8")) as object) : {}) } as never, loadOrCreateKey(o.key));
+      if (o.software) {
+        const { signature: _old, ...body } = m as unknown as Record<string, unknown> & { agent: Record<string, unknown> };
+        body.agent = { ...(body.agent as Record<string, unknown>), software: o.software };
+        Object.assign(m, signDocument(body, loadOrCreateKey(o.key)));
+      }
+      const valid = compileContract("mandate.schema.json");
+      if (!valid(m)) throw new Error(`The mandate is not valid: ${(valid.errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message}`).join("; ")}`);
       writeFileSync(o.out, JSON.stringify(m, null, 2) + "\n");
-      process.stdout.write(`Agent ${sanitizeText(o.name, 80)}: ${agentKey.kid}\nMandate signed by ${m.owner.id}, valid until ${o.expires}: ${m.allow.servers ? `servers ${m.allow.servers.join(", ")}` : "any server"}; ${m.allow.tools ? `tools ${m.allow.tools.join(", ")}` : "any tool"}; destructive actions ${m.allow.destructive ? "allowed" : "not allowed"}.\nWrote ${sanitizeText(o.out)} and the agent key ${sanitizeText(o.agentKey)} (keep it private).\n`);
+      for (const line of describeMandate(m as never)) process.stdout.write(`  ${line}\n`);
+      process.stdout.write(`Agent ${sanitizeText(o.name, 80)}: ${agentKey.kid}\nMandate signed by ${m.owner.id}, valid until ${o.expires}: ${m.allow.servers ? `servers ${m.allow.servers.join(", ")}` : "any server"}; ${m.allow.tools ? `tools ${m.allow.tools.join(", ")}` : "any tool"}; destructive actions ${m.allow.destructive ? "allowed" : "not allowed"}; autonomy ${m.autonomy}; risk tier ${agentRiskTier(m).tier} (${agentRiskTier(m).note}).\nWrote ${sanitizeText(o.out)} and the agent key ${sanitizeText(o.agentKey)} (keep it private).\n`);
     });
   agent.command("verify")
-    .description("Check a mandate's owner signature and expiry")
+    .description("Check a mandate: the principal's signature, the operator's countersignature, expiry and revocation")
     .argument("<mandate>", "mandate file")
     .action((f: string) => {
       const m = JSON.parse(readFileSync(f, "utf8")) as Mandate;
-      const c = checkMandate(m);
+      const c = checkMandate(m), op = checkOperator(m as never), rev = revocationOf(m);
       process.stdout.write(c.ok ? `\u2713 Valid mandate for ${sanitizeText(m.agent.name, 80)} (${m.agent.id}), signed by ${m.owner.name ?? m.owner.id}, until ${m.expires}.\n` : `\u2717 ${c.reason}\n`);
-      exitCode = c.ok ? 0 : 1;
+      if (op.present) process.stdout.write(op.valid ? `\u2713 Countersigned by the operator ${sanitizeText(op.name ?? "", 80)} (${op.id}).\n` : `\u2717 Operator countersignature: ${op.reason}\n`);
+      if (rev) process.stdout.write(`\u2717 Revoked on ${rev.at.slice(0, 10)}${rev.reason ? `: ${sanitizeText(rev.reason, 200)}` : ""}.\n`);
+      exitCode = c.ok && (!op.present || op.valid) && !rev ? 0 : 1;
+    });
+  agent.command("cosign")
+    .description("As the operator (who runs the agent and is accountable), countersign a principal's mandate")
+    .argument("<mandate>", "mandate file (updated in place)")
+    .requiredOption("--name <operator>", "the operator's name")
+    .option("--key <path>", "the operator's signing key (created if missing)", "saktum-operator-key.json")
+    .action((f: string, o: { name: string; key: string }) => {
+      const m = JSON.parse(readFileSync(f, "utf8")) as Mandate;
+      if (!checkMandate(m).ok) throw new Error("The mandate is not valid; it cannot be countersigned.");
+      const signed = cosignMandate(m, loadOrCreateKey(o.key), o.name);
+      writeFileSync(f, JSON.stringify(signed, null, 2) + "\n");
+      process.stdout.write(`Countersigned by ${sanitizeText(o.name, 80)} (${loadOrCreateKey(o.key).kid}). Check: npx saktum agent verify ${sanitizeText(f)}\n`);
+    });
+  agent.command("approve")
+    .description("As the mandate's owner, approve exactly one pending action (by its request id), for a limited time, once")
+    .argument("<request-id>", "the approval request id from the blocked call (apr_...)")
+    .requiredOption("--mandate <file>", "the mandate")
+    .option("--key <path>", "the owner's signing key (the one that signed the mandate)")
+    .option("--minutes <n>", "how long the approval stays valid", "60")
+    .option("--approvals <file>", "approvals file the proxy reads (default ~/.saktum/approvals.json)")
+    .action((rid: string, o: { mandate: string; key?: string; minutes: string; approvals?: string }) => {
+      const m = JSON.parse(readFileSync(o.mandate, "utf8")) as Mandate;
+      const a = approveAction(m, rid, loadOrCreateKey(o.key), Number(o.minutes), o.approvals);
+      process.stdout.write(`Approved ${sanitizeText(rid, 40)} for ${sanitizeText(m.agent.name, 80)}, valid until ${a.expires}, once. The agent can now retry exactly that action.\n`);
+    });
+  agent.command("revoke")
+    .description("Stop an agent now: every Saktum proxy on this machine refuses calls under this mandate")
+    .argument("<mandate>", "mandate file")
+    .option("--reason <text>", "why")
+    .action((f: string, o: { reason?: string }) => {
+      const m = JSON.parse(readFileSync(f, "utf8")) as Mandate;
+      const r = revokeMandate(m, o.reason);
+      process.stdout.write(`Revoked the mandate for ${sanitizeText(m.agent.name, 80)} at ${r.at}. Its calls are now refused (code: revoked).\n`);
     });
 
   program.command("proxy")
@@ -482,7 +547,9 @@ export async function main(argv = process.argv): Promise<number> {
     .option("--agent-key <file>", "the agent's key, which signs receipts", "agent-key.json")
     .option("--enforce", "block calls outside the mandate (default: observe and record only)", false)
     .option("--receipts <file>", "receipt log (append-only, hash-chained)")
-    .action(async (parts: string[], o: { mandate?: string; agentKey: string; enforce: boolean; receipts?: string }) => {
+    .option("--revocations <file>", "revocation list to honour (default ~/.saktum/revocations.json)")
+    .option("--approvals <file>", "signed approvals to honour (default ~/.saktum/approvals.json)")
+    .action(async (parts: string[], o: { mandate?: string; agentKey: string; enforce: boolean; receipts?: string; revocations?: string; approvals?: string }) => {
       const { homedir } = await import("node:os");
       const { join } = await import("node:path");
       let mandate: Mandate | undefined;
@@ -490,7 +557,7 @@ export async function main(argv = process.argv): Promise<number> {
       const agentKey = loadOrCreateKey(o.agentKey);
       if (mandate && agentKey.kid !== mandate.agent.id) throw new Error("The agent key does not match the mandate's agent.");
       const { runProxy } = await import("./proxy.js");
-      exitCode = await runProxy({ command: parts[0]!, args: parts.slice(1), receiptsPath: o.receipts ?? join(homedir(), ".saktum", "receipts.jsonl"), agentKey, mandate, enforce: o.enforce, log: (m) => process.stderr.write(`saktum: ${m}\n`) });
+      exitCode = await runProxy({ command: parts[0]!, args: parts.slice(1), receiptsPath: o.receipts ?? join(homedir(), ".saktum", "receipts.jsonl"), agentKey, mandate, enforce: o.enforce, ...(o.revocations ? { revocationsPath: o.revocations } : {}), ...(o.approvals ? { approvalsPath: o.approvals } : {}), log: (m) => process.stderr.write(`saktum: ${m}\n`) });
     });
 
   const receipts = program.command("receipts").description("Signed receipts of agent tool calls (from saktum proxy)");
@@ -559,7 +626,10 @@ export async function main(argv = process.argv): Promise<number> {
           receipts = { verified: verifyReceiptLog(entries).ok, summary: summariseReceipts(entries),
             timeline: entries.map((e) => ({ tool: e.receipt.envelope.tool, outcome: e.receipt.outcome, status: e.result.status, repeated: (counts.get(`${e.receipt.envelope.tool}|${e.receipt.envelope.argumentsHash}`) ?? 0) >= 3 })) };
         }
-        writeFileSync(o.out, renderAgentPassport(m, valid.ok ? { ok: true } : { ok: false, reason: valid.reason }, receipts));
+        const rev = revocationOf(m), op = checkOperator(m as never);
+        const ts = o.receipts ? trustStatement(parseReceiptLog(readFileSync(o.receipts, "utf8")), receipts?.verified ?? false) : undefined;
+        writeFileSync(o.out, renderAgentPassport(m, rev ? { ok: false, reason: `Revoked on ${rev.at.slice(0, 10)}${rev.reason ? `: ${rev.reason}` : ""}` } : valid.ok ? { ok: true } : { ok: false, reason: valid.reason }, receipts, agentRiskTier(m), describeMandate(m as never),
+          { operator: op.present && op.valid ? `${op.name} (${op.id})` : undefined, track: ts?.lines }));
         process.stdout.write(`Wrote the Agent Passport for ${sanitizeText(m.agent.name, 80)} to ${sanitizeText(o.out)}. Open it in a browser.\n`);
         return;
       }
@@ -647,6 +717,40 @@ export async function main(argv = process.argv): Promise<number> {
       if (o.html) writeFileSync(o.html, fleetHtml(fleet));
       exitCode = fleet.nonCompliant ? 1 : 0;
     });
+
+  program.command("bindings")
+    .description("How Saktum reads a server's tools (action class, what each argument means), and the _meta block to declare them")
+    .argument("<target...>", "https://host/mcp  or  -- node server.js")
+    .option("--env <KEY=VALUE>", "environment variable for a local server (repeatable)", collect, [] as string[])
+    .action(async (parts: string[], o: { env: string[] }) => {
+      const target = parseTarget(parts);
+      if (target.kind === "stdio" && o.env.length) target.env = parseEnv(o.env);
+      const s2 = await connect(target);
+      let tools: { name: string; description?: string; inputSchema?: unknown; _meta?: Record<string, unknown> }[] = [];
+      try { tools = (await s2.listTools()) as never; } finally { await s2.close(); }
+      for (const t of tools) {
+        const a = actionClass(t), b = bindingsFor(t);
+        process.stdout.write(`${sanitizeText(t.name, 60).padEnd(28)} ${a.cls.padEnd(12)} ${b.basis === "declared" ? "declared" : "inferred"}: ${Object.entries(b.bindings).map(([k, f]) => `${k} \u2192 ${f}`).join(", ") || "(no domain arguments)"}\n`);
+      }
+      const undeclared = tools.filter((t) => !t._meta?.["io.saktum/bindings"]);
+      if (undeclared.length) {
+        process.stdout.write(`\nTo declare them, add to each tool's definition (MCP tools accept _meta):\n`);
+        for (const t of undeclared.slice(0, 5)) process.stdout.write(`  ${t.name}: _meta: ${JSON.stringify({ "io.saktum/action": actionClass(t).cls, "io.saktum/bindings": bindingsFor(t).bindings })}\n`);
+      }
+    });
+
+  program.command("demo")
+    .description("See permissions, autonomy, risk and receipts in 60 seconds: one shopping agent under three mandates")
+    .option("--out <dir>", "folder for the demo's mandates, receipts and passports", "saktum-demo")
+    .option("--story <name>", "grocery, travel, finance, autonomy, or all (grocery, travel and finance)", "all")
+    .action(async (o: { out: string; story: string }) => {
+      const { runDemo } = await import("./demo.js");
+      await runDemo(o.out, (l) => process.stdout.write(l + "\n"), o.story);
+    });
+  program.command("demo-server", { hidden: true })
+    .description("The demo MCP servers (used by saktum demo)")
+    .option("--story <name>", "grocery, travel, finance or autonomy", "autonomy")
+    .action(async (o: { story: string }) => { const { startDemoServer } = await import("./demo.js"); await startDemoServer(o.story); });
 
   program.command("mcp")
     .description("Run Saktum Check as an MCP server (stdio), so coding agents can test, fix, diff and document MCP servers")

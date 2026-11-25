@@ -4,6 +4,7 @@ import { contextCost, needsOf, type AnalyserContext } from "./analysers.js";
 import { gradeFor, summarise } from "./grade.js";
 import { readinessFor } from "./readiness.js";
 import { capabilityProfile } from "./capabilities.js";
+import { riskTier } from "./risk.js";
 import { runFunctional, runTestCases, type FunctionalReport, type TestCase, type TestResult } from "./functional.js";
 import { measureLoad } from "./load.js";
 import { checkNeedsSession, runCheck, SIGN_IN_HINT } from "./runner.js";
@@ -11,7 +12,7 @@ import { sanitizeText } from "./safe.js";
 import { score, TRUST_WEIGHTS } from "./scoring.js";
 import type { Finding, LoadedPack, Result } from "./types.js";
 
-export const ENGINE_VERSION = "0.6.0";
+export const ENGINE_VERSION = "0.7.0";
 export const UNKNOWN_TOOL = "saktum_trust_check_no_such_tool";
 const INVALID_TOKEN = "saktum-check-deliberately-invalid-token";
 
@@ -192,7 +193,7 @@ export async function runTrustCheck(target: Target, opts: RunOptions): Promise<R
     return finish(target, { ...opts, mode }, startedAt, findings,
       session ? { protocolVersion: session.protocolVersion, serverInfo: session.serverInfo, toolsFingerprint: fingerprint, toolCount: tools.length } : { toolCount: 0 },
       metrics, session?.sandbox ?? "none", noGrade, session && !listError ? readinessFor(tools) : null, {
-        ...(session && !listError && tools.length ? { capabilities: capabilityProfile(tools) } : {}),
+        ...(session && !listError && tools.length ? { capabilities: capabilityProfile(tools), riskTier: riskTier(tools) } : {}),
         ...(ctx.functional ? { functional: summariseFunctional(ctx.functional) } : {}),
         ...(ctx.load ? { load: ctx.load } : {}),
         ...(testResults ? { tests: testResults } : {})

@@ -18,7 +18,7 @@ npx saktum scan-config                                          # your agent set
 npx saktum check --sarif saktum.sarif --baseline b.json -- ...  # CI: GitHub code scanning; fail only on new findings
 npx saktum attest saktum-report.json --publish                  # signed attestation, badge, and a link to the public trust ledger
 npx saktum ledger verify                                        # verify the public trust ledger
-npx saktum agent create --name "My agent" --allow-tool get_order  # agent identity and a mandate you sign (preview)
+npx saktum agent create --name "Shopper" --autonomy act --max pay_for_order.amount=50 --approve-above amount=25   # identity and permissions
 npx saktum proxy --mandate agent-mandate.json --enforce -- npx -y some-server   # signed receipts for every call
 npx saktum receipts summary                                     # the path: tools, order, retries, denials
 npx saktum passport -- npx -y some-server                       # a visual MCP Server Passport

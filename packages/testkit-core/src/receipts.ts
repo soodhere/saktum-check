@@ -8,7 +8,8 @@ export interface Receipt {
   envelope: { envelopeFormat: "0.1"; id: string; protocol: "mcp"; operation: "tools/call"; tool: string; caller: { agent?: string; onBehalfOf?: string }; target: { service: string; version?: string }; argumentsHash: string; timestamp: string; context?: Record<string, unknown> };
   outcome: "allow" | "deny" | "error"; reason?: string; issuedAt: string; signatures: Signature[];
 }
-export interface ReceiptLogEntry { seq: number; receipt: Receipt; result: { status: "ok" | "tool-error" | "protocol-error" | "blocked" | "no-response"; latencyMs?: number; destructive?: boolean }; prevHash: string; entryHash: string }
+export interface ReceiptLogEntry { seq: number; receipt: Receipt; result: { status: "ok" | "tool-error" | "protocol-error" | "blocked" | "no-response"; latencyMs?: number; destructive?: boolean; code?: string; values?: Record<string, string | number>;
+    rationale?: { evaluated: { rule: string; ok: boolean }[]; preferences: string[]; flags: string[] } }; prevHash: string; entryHash: string }
 export const RECEIPTS_GENESIS = "sha256:genesis";
 
 export const argumentsHash = (args: unknown) => sha256Tag(canonicalize(args ?? {}));
@@ -62,6 +63,7 @@ export function summariseReceipts(entries: ReceiptLogEntry[]) {
     repeatedIdenticalCalls: [...repeats].filter(([, n]) => n >= 3).map(([k, n]) => ({ call: k.split("/").slice(0, 2).join("/"), times: n })),
     from: entries[0]?.receipt.issuedAt, to: entries[entries.length - 1]?.receipt.issuedAt,
     medianLatencyMs: lat.length ? [...lat].sort((a, b) => a - b)[Math.floor(lat.length / 2)] : undefined,
-    order: entries.slice(0, 50).map((e) => e.receipt.envelope.tool)
+    order: entries.slice(0, 50).map((e) => e.receipt.envelope.tool),
+    byCode: Object.entries(entries.reduce((a, e) => { const k = e.result.code ?? (e.receipt.outcome === "deny" ? "denied" : "ok"); a[k] = (a[k] ?? 0) + 1; return a; }, {} as Record<string, number>)).map(([code, count]) => ({ code, count }))
   };
 }

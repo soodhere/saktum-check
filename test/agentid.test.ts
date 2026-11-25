@@ -47,7 +47,7 @@ describe("saktum proxy (end to end)", () => {
   it("enforce: blocks calls outside the mandate and records signed, chained receipts", async () => {
     const { rf, blocked, dir } = await run(true);
     expect(blocked.kind === "result" && blocked.isError).toBe(true);
-    expect(JSON.stringify(blocked)).toMatch(/Blocked by Saktum: tool save_note is not in the agent's mandate/);
+    expect(JSON.stringify(blocked)).toMatch(/Blocked by Saktum \(not-in-mandate\): tool save_note is not in the agent.s mandate/);
     const entries = parseReceiptLog(readFileSync(rf, "utf8"));
     expect(verifyReceiptLog(entries)).toMatchObject({ ok: true, count: 4 });
     const receiptContract = compileContract("receipt.schema.json");

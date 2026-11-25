@@ -11,6 +11,30 @@ npx saktum check https://your-server.example/mcp     # a remote server (sign-in 
 
 Runs on your machine. Nothing is uploaded. Your own environment variables are never passed to the server.
 
+## Agents that follow instructions (v0.7)
+
+Mandates now carry **intent**: purpose, autonomy per action, rules, ranked preferences, substitution and upsell
+policies, approval triggers, allowed counterparties and data sharing, written in domain terms (commerce, travel) and
+enforced on any server through **semantic bindings**. Every receipt explains the decision: the rules checked, the
+preferences matched or missed, and flags such as a sponsored option. Personal data goes only where the mandate allows;
+confidential data only to the recipients named for its class; high-risk actions wait for the owner's signed approval
+of exactly that action (`saktum agent approve`); the operator countersigns; `saktum agent revoke` stops an agent at
+once; and every passport carries a track record.
+Even if an agent is tricked by a hidden instruction, the mandate holds. Guide: [docs/MANDATES.md](docs/MANDATES.md).
+
+## See it in 60 seconds
+
+```
+npx saktum demo
+```
+
+A grocery agent and a travel agent follow their owners' instructions: the usual brand matched; at most 2 of each item;
+a substitute within 10% allowed but never for baby food; upgrades and fees ask first; a sponsored option flagged; a
+two-stop or non-refundable fare blocked; a hidden instruction to buy gift cards and pay a stranger stopped; a passport
+kept from a hotel partner; a confidential forecast kept from a partner agency; a $12,000 invoice paid only after your
+signed approval of exactly that payment; and the stop button honoured. Every decision has a signed receipt with its reason, and each agent gets a
+passport with its instructions in plain words. Also: `npx saktum demo --story autonomy` (notify, propose, act).
+
 ## Start here
 
 | I want to… | Run |
@@ -63,6 +87,19 @@ grade. Every report ends with **OWASP MCP Top 10 coverage**: which categories th
 - **Trust card and scope:** every report says, dimension by dimension, what was tested, what was not, and why.
   `npx saktum checks` lists every check with the standard behind it ([docs/CHECKS.md](docs/CHECKS.md)).
 - **Control:** `--ignore check.id="reason"` (shown in the report, not scored) and `--badge badge.svg` for your README.
+
+## Permissions and risk (v0.6.1)
+
+Grades say how well a server is built; the **risk tier** says how much care it needs: **R0** reads public information,
+**R1** reads private data, **R2** changes data, **R3** irreversible actions or external messages, **R4** moves money or
+runs code. Every report and passport shows both ("Trust A · Risk R4"), and policies can require evidence proportionate
+to the tier (`maxRiskTier`).
+
+Mandates carry real permissions, enforced by the proxy before each call: `--autonomy notify|propose|act`,
+`--max checkout.amount=50`, `--allow-value checkout.currency=CAD`, `--approve-above amount=25`, `--daily-calls 20`,
+`--daily-total amount=200`, disclosures (`--operator`, `--incentives`, `--data-use`), and no sub-delegation unless
+`--allow-delegation`. Tools that move money are denied unless explicitly granted. Every receipt carries a reason code
+(`ok-action`, `notify-only`, `approval-needed`, `over-cap`, `value-not-allowed`, `daily-limit`, `money-not-granted`).
 
 ## Govern what agents do: identity, mandates, signed receipts (preview)
 
@@ -164,7 +201,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.6.0
+- uses: soodhere/saktum-check@v0.7.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

@@ -25,3 +25,5 @@ export * from "./agentid.js";
 export * from "./receipts.js";
 export * from "./interop.js";
 export * from "./watch.js";
+export * from "./risk.js";
+export * from "./vocab.js";

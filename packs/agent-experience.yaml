@@ -31,3 +31,10 @@ checks:
     scored: false
     steps: [{ action: analyse, analyser: client-compat }]
     fix: Use tool names of 1 to 64 letters, digits, underscores and hyphens, keep them short enough for a server prefix, and keep the tool count manageable.
+  - id: ax.payments-idempotent
+    title: Tools that move money are idempotent
+    severity: info
+    safety: passive
+    scored: false
+    steps: [{ action: analyse, analyser: payments-idempotency }]
+    fix: Mark payment tools idempotentHint true and accept an idempotency key, so a retried call can never charge twice.

@@ -5,6 +5,7 @@ import { sha256Tag } from "@saktum/sign";
 import { compileUntrustedSchema } from "./contracts.js";
 import { INVISIBLE, sanitizeText } from "./safe.js";
 import { clientCompatibility } from "./provider.js";
+import { capabilityProfile } from "./capabilities.js";
 import { authAnalysers, AUTH_NEEDS } from "./auth.js";
 import { leakageAnalysers, LEAKAGE_NEEDS } from "./leakage.js";
 import { perfAnalysers, PERF_NEEDS } from "./perf.js";
@@ -64,6 +65,14 @@ const HIDDEN_INSTRUCTION = [
 ];
 
 const coreAnalysers: Record<string, Analyser> = {
+  "payments-idempotency": ({ tools }) => {
+    const money = tools.filter((t) => capabilityProfile([t]).capabilities.some((c) => c.capability === "money"));
+    if (!money.length) return { status: "pass", message: "No tools that move money were found." };
+    const weak = money.filter((t) => (t.annotations as { idempotentHint?: boolean } | undefined)?.idempotentHint !== true
+      && !Object.keys(((t.inputSchema ?? {}) as { properties?: Record<string, unknown> }).properties ?? {}).some((k) => /idempot|request_?id|client_?reference|dedup/i.test(k)));
+    return weak.length ? { status: "info", message: `${weak.length} tool(s) that move money declare no idempotency (idempotentHint or an idempotency key): ${weak.slice(0, 5).map((t) => t.name).join(", ")}. A retried call could charge twice.` }
+      : { status: "pass", message: `${money.length} tool(s) that move money declare idempotency.` };
+  },
   "client-compat": ({ tools }) => {
     const issues = clientCompatibility(tools);
     return issues.length ? { status: "info", message: issues.join(" ") } : { status: "pass", message: "Tool names and count fit the constraints common to model providers and clients." };

@@ -1,0 +1,63 @@
+{
+  "purpose": "Weekly groceries for the family",
+  "actions": [
+    {
+      "cls": "search",
+      "autonomy": "act"
+    },
+    {
+      "cls": "cart",
+      "autonomy": "act"
+    },
+    {
+      "cls": "pay",
+      "autonomy": "propose"
+    }
+  ],
+  "rules": [
+    {
+      "field": "commerce.item.quantity",
+      "op": "max",
+      "value": 2,
+      "label": "at most 2 of each item"
+    },
+    {
+      "field": "commerce.item.category",
+      "op": "notIn",
+      "value": [
+        "alcohol"
+      ],
+      "label": "never alcohol"
+    },
+    {
+      "field": "commerce.order.total",
+      "op": "max",
+      "value": 150,
+      "label": "up to $150 per order"
+    }
+  ],
+  "substitution": {
+    "allowed": true,
+    "maxPriceChangePct": 10,
+    "neverFor": [
+      "baby food"
+    ]
+  },
+  "upsell": "ask",
+  "approvalTriggers": [
+    "sponsored"
+  ],
+  "preferences": [
+    {
+      "field": "commerce.item.brand",
+      "prefer": "Usual Farms",
+      "label": "the usual brand"
+    }
+  ],
+  "dataSharing": [
+    {
+      "data": "delivery address",
+      "to": "the store"
+    }
+  ]
+}

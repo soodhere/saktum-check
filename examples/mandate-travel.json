@@ -1,0 +1,54 @@
+{
+  "purpose": "Business trip to Montreal, 3 to 4 March",
+  "actions": [
+    {
+      "cls": "search",
+      "autonomy": "act"
+    },
+    {
+      "cls": "book",
+      "autonomy": "act"
+    },
+    {
+      "cls": "change",
+      "autonomy": "act"
+    }
+  ],
+  "rules": [
+    {
+      "field": "travel.fare.total",
+      "op": "max",
+      "value": 600,
+      "label": "fare up to $600"
+    },
+    {
+      "field": "travel.itinerary.connections",
+      "op": "max",
+      "value": 1,
+      "label": "at most one connection"
+    },
+    {
+      "field": "travel.fare.refundable",
+      "op": "eq",
+      "value": true,
+      "label": "refundable fares only"
+    }
+  ],
+  "upsell": "ask",
+  "approvalTriggers": [
+    "fee"
+  ],
+  "preferences": [
+    {
+      "field": "travel.seat",
+      "prefer": "aisle",
+      "label": "an aisle seat"
+    }
+  ],
+  "dataSharing": [
+    {
+      "data": "passport details",
+      "to": "the airline"
+    }
+  ]
+}
