@@ -1,0 +1,31 @@
+# Continuous monitoring of the MCP servers your agents depend on (copy to .github/workflows/saktum-watch.yml).
+# Every morning, re-checks each server on your allowlist; if tools changed, a grade dropped or a server is unreachable,
+# it opens an issue (and posts to a webhook if you set the SAKTUM_WEBHOOK secret).
+name: saktum-watch
+on:
+  schedule: [{ cron: "0 7 * * *" }]
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Re-check approved MCP servers
+        id: watch
+        env: { WEBHOOK: "${{ secrets.SAKTUM_WEBHOOK }}" }
+        run: |
+          set +e
+          npx -y saktum@latest watch saktum-allowlist.json --out watch.json ${WEBHOOK:+--webhook "$WEBHOOK"} > watch.txt 2>&1
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat watch.txt
+      - name: Open an issue when something needs attention
+        if: steps.watch.outputs.code != '0'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          { echo "Saktum watch found MCP servers that need attention:"; echo; echo '```'; cat watch.txt; echo '```'; } > body.md
+          gh issue create --title "Saktum watch: MCP servers need attention ($(date -u +%F))" --body-file body.md

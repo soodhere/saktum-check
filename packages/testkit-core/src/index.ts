@@ -23,3 +23,5 @@ export * from "./fleet.js";
 export * from "./ledger.js";
 export * from "./agentid.js";
 export * from "./receipts.js";
+export * from "./interop.js";
+export * from "./watch.js";

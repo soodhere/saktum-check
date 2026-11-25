@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { passportSlug, renderAgentPassport, renderAssessment, renderLedgerPassport, renderPassportGallery, renderServerPassport, badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
@@ -390,6 +390,15 @@ export async function main(argv = process.argv): Promise<number> {
       if (o.out) writeFileSync(o.out, JSON.stringify({ ...report, machine: o.machine ?? hostname() }, null, 2) + "\n");
     });
 
+  program.command("vc").description("W3C Verifiable Credentials made by saktum attest --vc").command("verify")
+    .description("Verify a Saktum credential (vc+jwt): signature and issuer did:key")
+    .argument("<file>", "the .vc.jwt file")
+    .action((f: string) => {
+      const r = verifyCredentialJwt(readFileSync(f, "utf8"));
+      if (r.valid) { const cs = (r.credential.credentialSubject ?? {}) as Record<string, unknown>; process.stdout.write(`\u2713 Valid credential from ${r.issuer}: ${sanitizeText(String(cs.server ?? ""), 80)} trust ${cs.trustGrade ?? "-"}, readiness ${cs.readinessGrade ?? "-"}.\n`); }
+      else { process.stdout.write(`\u2717 Not valid: ${r.reason}\n`); exitCode = 1; }
+    });
+
   const ledger = program.command("ledger").description("The public Saktum trust ledger: signed attestations in an append-only, hash-chained log");
   ledger.command("verify")
     .description("Verify every signature and the hash chain of a ledger (default: the public ledger)")
@@ -494,6 +503,25 @@ export async function main(argv = process.argv): Promise<number> {
       process.stdout.write(r.ok ? `\u2713 ${r.count} receipts verified: every signature valid, chain intact.\n` : `\u2717 Receipts do NOT verify:\n${r.errors.slice(0, 10).map((e) => `  ${e}`).join("\n")}\n`);
       exitCode = r.ok ? 0 : 1;
     });
+  receipts.command("export")
+    .description("Export receipts as OpenTelemetry traces (OTLP/JSON) for your observability or security tools")
+    .argument("[file]", "receipt log")
+    .option("--otel <file>", "write OTLP/JSON traces to this file", "saktum-receipts.otlp.json")
+    .option("--endpoint <url>", "also send them to an OpenTelemetry collector (OTLP/HTTP), for example http://localhost:4318")
+    .action(async (f: string | undefined, o: { otel: string; endpoint?: string }) => {
+      const { homedir } = await import("node:os"); const { join } = await import("node:path");
+      const entries = parseReceiptLog(readFileSync(f ?? join(homedir(), ".saktum", "receipts.jsonl"), "utf8"));
+      const v = verifyReceiptLog(entries);
+      const otlp = receiptsToOtlp(entries, { verified: v.ok, version: ENGINE_VERSION });
+      writeFileSync(o.otel, JSON.stringify(otlp, null, 2) + "\n");
+      process.stdout.write(`Wrote ${entries.length} span(s) to ${sanitizeText(o.otel)} (receipts ${v.ok ? "verified" : "DO NOT verify"}).\n`);
+      if (o.endpoint) {
+        const url = o.endpoint.replace(/\/+$/, "") + "/v1/traces";
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(otlp) });
+        process.stdout.write(`Sent to ${sanitizeText(url)}: HTTP ${res.status}\n`);
+        if (!res.ok) exitCode = 1;
+      }
+    });
   receipts.command("summary")
     .description("The path, not the answer: which tools were called, how often, in what order, retries, denials, destructive actions")
     .argument("[file]", "receipt log")
@@ -548,16 +576,59 @@ export async function main(argv = process.argv): Promise<number> {
       process.stdout.write(`Wrote the MCP Server Passport for ${sanitizeText(String(r.target.serverInfo?.["name"] ?? "server"), 80)} to ${sanitizeText(o.out)} (trust ${r.grade ?? "-"}, readiness ${r.readiness?.grade ?? "-"}), and its signed result beside it.\n`);
     });
 
+  program.command("watch")
+    .description("Continuous monitoring: re-check every server on an allowlist and alert on changed tools, grade drops or unreachable servers")
+    .argument("<allowlist>", "saktum-allowlist.json (from saktum allowlist)")
+    .option("--out <file>", "write the results as JSON")
+    .option("--webhook <url>", "POST a summary to this URL when something changed (for example a chat or incident webhook)")
+    .action(async (file: string, o: { out?: string; webhook?: string }) => {
+      const list = JSON.parse(readFileSync(file, "utf8")) as { allowed: WatchEntry[] };
+      const packs = existsSync(bundledPacks) ? loadPackDir(bundledPacks) : loadEmbeddedPacks();
+      const r = await watchAllowlist(list.allowed ?? [], packs);
+      const mark = { unchanged: "\u2713", changed: "\u2717", degraded: "!", unreachable: "?" };
+      for (const f of r.findings) process.stdout.write(`${mark[f.status]} ${sanitizeText(f.server, 60).padEnd(32)} ${f.status}${f.details.length ? `: ${sanitizeText(f.details.join("; "), 300)}` : ""}\n`);
+      process.stdout.write(`\n${r.findings.length} server(s) checked; ${r.alerts} need attention.\n`);
+      if (o.out) writeFileSync(o.out, JSON.stringify(r, null, 2) + "\n");
+      if (o.webhook && r.alerts) {
+        const text = `Saktum watch: ${r.alerts} MCP server(s) need attention. ${r.findings.filter((f) => f.status !== "unchanged").map((f) => `${f.server}: ${f.details.join("; ")}`).join(" | ")}`.slice(0, 3000);
+        try { const res = await fetch(o.webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, findings: r.findings }) }); process.stdout.write(`Webhook: HTTP ${res.status}\n`); } catch (e) { process.stderr.write(`Webhook failed: ${sanitizeText((e as Error).message, 200)}\n`); }
+      }
+      exitCode = r.alerts ? 1 : 0;
+    });
+
+  program.command("roi")
+    .description("What tool definitions cost your agents a year, and what Saktum's fixes and passports can save (assumptions shown)")
+    .option("--tokens-per-turn <n>", "tokens of tool definitions per turn (from saktum check or scan-config)", "5047")
+    .option("--turns-per-day <n>", "agent turns a day, per agent", String(ROI_DEFAULTS.turnsPerDay))
+    .option("--agents <n>", "number of agents", String(ROI_DEFAULTS.agents))
+    .option("--price-per-mtok <usd>", "price per million input tokens", String(ROI_DEFAULTS.pricePerMTok))
+    .option("--waste <share>", "share removable by fixes (0 to 1)", String(ROI_DEFAULTS.wasteShare))
+    .option("--vendor-reviews <n>", "AI vendor or tool security reviews a year", "0")
+    .option("--hours-per-review <n>", "hours per review", String(ROI_DEFAULTS.hoursPerReview))
+    .option("--hourly-cost <usd>", "loaded cost per hour", String(ROI_DEFAULTS.hourlyCost))
+    .action((o: Record<string, string>) => {
+      const n = (k: string) => Number(o[k]);
+      const r = roiEstimate({ tokensPerTurn: n("tokensPerTurn"), turnsPerDay: n("turnsPerDay"), agents: n("agents"), pricePerMTok: n("pricePerMtok"), wasteShare: n("waste"), vendorReviews: n("vendorReviews"), hoursPerReview: n("hoursPerReview"), hourlyCost: n("hourlyCost"), reviewTimeSaved: ROI_DEFAULTS.reviewTimeSaved });
+      const usd = (x: number) => `$${x.toLocaleString("en-US")}`;
+      process.stdout.write(`Tool definitions cost about ${usd(r.annualToolCost)} a year.\nFixes could save about ${usd(r.tokenSavings)} a year${r.reviewSavings ? `; passports could save about ${usd(r.reviewSavings)} of review effort` : ""}.\nTotal: about ${usd(r.totalSavings)} a year.\nAssumptions: ${r.assumptions}.\n`);
+    });
+
   program.command("assess")
     .description("An executive MCP Trust Assessment for an organisation, from a fleet inventory and agent receipts (pilot deliverable)")
     .requiredOption("--fleet <file>", "inventory JSON from saktum fleet --out")
     .option("--org <name>", "organisation name", "Your organisation")
     .option("--receipts <file>", "an agent's receipt log (repeatable)", collect, [] as string[])
     .option("--out <file>", "HTML report (print to PDF from a browser)", "saktum-assessment.html")
-    .action((o: { fleet: string; org: string; receipts: string[]; out: string }) => {
+    .option("--agents <n>", "agents in production, for the business case", "10")
+    .option("--turns-per-day <n>", "turns a day per agent", "1000")
+    .option("--price-per-mtok <usd>", "price per million input tokens", "3")
+    .option("--vendor-reviews <n>", "AI vendor or tool security reviews a year", "20")
+    .action((o: { fleet: string; org: string; receipts: string[]; out: string; agents: string; turnsPerDay: string; pricePerMtok: string; vendorReviews: string }) => {
       const fleet = JSON.parse(readFileSync(o.fleet, "utf8"));
       const rec = o.receipts.map((f) => { const e = parseReceiptLog(readFileSync(f, "utf8")); return { agent: e[0]?.receipt.envelope.caller.agent?.slice(0, 32) ?? f, summary: summariseReceipts(e), verified: verifyReceiptLog(e).ok }; });
-      writeFileSync(o.out, renderAssessment(o.org, fleet, rec));
+      const distinctTokens = (fleet.servers ?? []).reduce((a: number, x: { tokens?: number }) => a + (x.tokens ?? 0), 0);
+      const roi = roiEstimate({ ...ROI_DEFAULTS, tokensPerTurn: distinctTokens, agents: Number(o.agents), turnsPerDay: Number(o.turnsPerDay), pricePerMTok: Number(o.pricePerMtok), vendorReviews: Number(o.vendorReviews) });
+      writeFileSync(o.out, renderAssessment(o.org, fleet, rec, roi));
       process.stdout.write(`Wrote the MCP Trust Assessment for ${sanitizeText(o.org, 80)} to ${sanitizeText(o.out)}: ${fleet.servers?.length ?? 0} servers, ${fleet.nonCompliant ?? 0} violating policy. Open it in a browser and print to PDF.\n`);
     });
 
@@ -592,7 +663,8 @@ export async function main(argv = process.argv): Promise<number> {
     .option("--out <file>", "attestation file", "saktum-attestation.json")
     .option("--key <path>", "signing key file")
     .option("--publish", "also print a link that publishes it to the public Saktum trust ledger (a pre-filled GitHub issue)", false)
-    .action((file: string, o: { out: string; key?: string; publish: boolean }) => {
+    .option("--vc", "also write it as a W3C Verifiable Credential (vc+jwt, issued by your did:key)", false)
+    .action((file: string, o: { out: string; key?: string; publish: boolean; vc: boolean }) => {
       const doc = JSON.parse(readFileSync(file, "utf8")) as Result;
       const v = verifyDocument(doc);
       if (!v.valid) throw new Error(`The result's signature is not valid (${v.reason}); attestations are built only from unaltered signed results.`);
@@ -602,6 +674,14 @@ export async function main(argv = process.argv): Promise<number> {
       process.stdout.write(`Wrote ${sanitizeText(o.out)} (trust ${c.trustGrade ?? "-"}, agent readiness ${c.readinessGrade ?? "-"}; evidence: ${Object.entries(c.evidence).filter(([, x]) => x).map(([k]) => k).join(", ") || "none"}).\n`
         + `Anyone can check it: npx saktum verify ${sanitizeText(o.out)}\n\nREADME badge:\n`
         + `[![Saktum trust ${c.trustGrade ?? "-"}](https://img.shields.io/badge/Saktum-trust%20${c.trustGrade ?? "-"}%20%C2%B7%20readiness%20${c.readinessGrade ?? "-"}-${colour(c.trustGrade)})](${sanitizeText(o.out)})\n`);
+      if (o.vc) {
+        const key = loadOrCreateKey(o.key);
+        const cred = attestationToCredential(att, key.kid);
+        const base = o.out.replace(/\.json$/i, "");
+        writeFileSync(`${base}.vc.jwt`, signCredentialJwt(cred, key) + "\n");
+        writeFileSync(`${base}.vc.json`, JSON.stringify(cred, null, 2) + "\n");
+        process.stdout.write(`\nW3C Verifiable Credential: ${sanitizeText(base)}.vc.jwt (check it: npx saktum vc verify ${sanitizeText(base)}.vc.jwt)\n`);
+      }
       if (o.publish) {
         const body = `Publishing a signed Saktum attestation to the public trust ledger. The bot verifies the signature and appends it.\n\n\`\`\`json\n${JSON.stringify(att)}\n\`\`\`\n`;
         const url = `https://github.com/soodhere/saktum-index/issues/new?title=${encodeURIComponent(`Attest: ${att.subject.server}`)}&body=${encodeURIComponent(body)}`;

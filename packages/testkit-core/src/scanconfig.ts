@@ -82,7 +82,8 @@ export function analyseSetup(scans: ServerScan[], o: { turnsPerDay: number; pric
 
 export function renderSetup(r: SetupReport): string {
   const L: string[] = ["Saktum scan-config: your agent set-up as a whole", ""];
-  L.push(`  ${r.servers.length} servers \u00b7 ${r.totalTokens.toLocaleString("en-US")} tokens of tool definitions every turn \u00b7 about $${r.monthlyCostUsd.toLocaleString("en-US")} a month at ${r.assumptions.turnsPerDay} turns a day and $${r.assumptions.pricePerMTokUsd} per million input tokens`, "");
+  const yearly = Math.round(r.monthlyCostUsd * 12);
+  L.push(`  ${r.servers.length} servers \u00b7 ${r.totalTokens.toLocaleString("en-US")} tokens of tool definitions every turn \u00b7 about $${r.monthlyCostUsd.toLocaleString("en-US")} a month at ${r.assumptions.turnsPerDay} turns a day and $${r.assumptions.pricePerMTokUsd} per million input tokens (about $${yearly.toLocaleString("en-US")} a year; npx saktum roi for the full business case)`, "");
   for (const s of r.servers) L.push(`  ${s.name.padEnd(28)} ${s.client.padEnd(22)} ${s.error ? `could not check: ${s.error}` : `trust ${s.trustGrade ?? "-"} \u00b7 readiness ${s.readinessGrade ?? "-"} \u00b7 ${s.toolCount} tools \u00b7 ${s.tokens.toLocaleString("en-US")} tokens${s.onAllowlist === false ? " \u00b7 not on allowlist" : ""}`}`);
   if (r.duplicates.length) { L.push("", "DUPLICATE TOOLS"); for (const d of r.duplicates.slice(0, 10)) L.push(`  ${d.tool}: ${d.servers.join(", ")}`); }
   if (r.overlaps.length) { L.push("", "TOOLS THAT LOOK ALIKE"); for (const o of r.overlaps.slice(0, 10)) L.push(`  ${o.a} \u2248 ${o.b} (${Math.round(o.similarity * 100)}% similar)`); }

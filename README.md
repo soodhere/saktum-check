@@ -82,6 +82,15 @@ with an honest error to the agent. Receipts follow Saktum's receipt contract and
 Preview limits: local (stdio) servers; receipts are signed by the agent side (bilateral receipts, co-signed by the
 server side, come with the Saktum gateway).
 
+## Plugs into what you run, and pays for itself (v0.6)
+
+| Command | What it does |
+| --- | --- |
+| `saktum watch saktum-allowlist.json` | Continuous monitoring: re-checks approved servers and alerts on changed tools, grade drops or unreachable servers (daily GitHub workflow: `examples/saktum-watch.yml`) |
+| `saktum receipts export --otel receipts.otlp.json [--endpoint http://collector:4318]` | Agent receipts as OpenTelemetry traces, into your observability and security tools |
+| `saktum attest saktum-report.json --vc` · `saktum vc verify file.vc.jwt` | Attestations as W3C Verifiable Credentials, issued by your did:key |
+| `saktum roi --tokens-per-turn 32833 --agents 10` | What tool definitions cost a year and what fixes and passports save (assumptions shown); `assess` includes the business case |
+
 ## Passports: trust you can see
 
 ```
@@ -155,7 +164,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.5.1
+- uses: soodhere/saktum-check@v0.6.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

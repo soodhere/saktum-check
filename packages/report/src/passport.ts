@@ -102,7 +102,8 @@ type FleetLike = { generatedAt: string; machines: number; nonCompliant: number; 
   servers: { name: string; machines: number; clients: string[]; trustGrade: string | null; readinessGrade: string | null; tokens: number; capabilities: string[]; verdict?: { compliant: boolean; violations: { rule: string; message: string; excepted?: unknown }[] } }[] };
 
 /** The executive assessment for an MCP Trust Pilot: inventory, risk, policy, agent receipts and next steps. */
-export function renderAssessment(org: string, f: FleetLike, receipts: { agent: string; summary: ReceiptSummaryLike; verified: boolean }[] = []): string {
+export function renderAssessment(org: string, f: FleetLike, receipts: { agent: string; summary: ReceiptSummaryLike; verified: boolean }[] = [],
+  roi?: { annualToolCost: number; tokenSavings: number; reviewSavings: number; totalSavings: number; assumptions: string }): string {
   const risky = new Set(["code-execution", "money", "sends-messages", "writes-or-deletes", "reads-private-data"]);
   const caps = ["code-execution", "money", "sends-messages", "writes-or-deletes", "reads-private-data", "network", "filesystem", "untrusted-content"];
   const grades = ["A", "B", "C", "D", "F", "-"];
@@ -123,6 +124,7 @@ export function renderAssessment(org: string, f: FleetLike, receipts: { agent: s
 <div class="card"><h2>Risk heat map: capability by trust grade</h2><div class="wrap"><table><tr><th>Capability</th>${grades.map((g) => `<th style="text-align:center">${g === "-" ? "n/a" : g}</th>`).join("")}</tr>${heat}</table></div><small>Red cells: risky capabilities on servers graded C or below, or not assessed.</small></div>
 <div class="card"><h2>Servers needing attention</h2>${top ? `<div class="wrap"><table><tr><th>Server</th><th>Machines</th><th>Trust / readiness</th><th>Why</th></tr>${top}</table></div>` : `<p>None: every assessed server meets the policy.</p>`}</div>
 ${rc ? `<div class="card"><h2>Agent receipts</h2><div class="wrap"><table><tr><th>Agent</th><th>Calls</th><th>Blocked</th><th>Destructive</th><th>Repeated calls</th><th>Receipts</th></tr>${rc}</table></div></div>` : ""}
+${roi ? `<div class="card"><h2>Business case</h2><div class="grid"><div class="kv"><small>Tool definitions cost a year</small><b>$${roi.annualToolCost.toLocaleString("en-US")}</b></div><div class="kv"><small>Savings from fixes</small><b>$${roi.tokenSavings.toLocaleString("en-US")}</b></div><div class="kv"><small>Review effort replaced by passports</small><b>$${roi.reviewSavings.toLocaleString("en-US")}</b></div><div class="kv"><small>Total a year</small><b>$${roi.totalSavings.toLocaleString("en-US")}</b></div></div><p class="muted">Estimate. Assumptions: ${esc(roi.assumptions)}. Replace them with your own figures.</p></div>` : ""}
 <div class="card"><h2>Recommendations</h2><ol>${rec.map((x) => `<li>${esc(x)}</li>`).join("")}</ol></div>
 <div class="card"><h2>Next steps</h2><p>1. Agree the policy and exceptions with security. 2. Enforce it in CI on MCP repositories. 3. Deploy the allowlist to the MCP firewall or gateway. 4. Extend agent mandates and receipts to production agent workflows with the Saktum gateway (design partnership).</p><p class="muted">Findings describe the servers and agents at the time of assessment and are not a guarantee of security.</p></div>`;
   return page(`MCP Trust Assessment: ${org}`, body);

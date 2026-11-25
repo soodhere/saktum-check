@@ -23,7 +23,11 @@ npx saktum proxy --mandate agent-mandate.json --enforce -- npx -y some-server   
 npx saktum receipts summary                                     # the path: tools, order, retries, denials
 npx saktum passport -- npx -y some-server                       # a visual MCP Server Passport
 npx saktum passport --agent agent-mandate.json --receipts r.jsonl   # an Agent Passport with the call timeline
-npx saktum assess --fleet inventory.json --org "Acme"           # executive MCP Trust Assessment (pilots)
+npx saktum assess --fleet inventory.json --org "Acme"           # executive MCP Trust Assessment with a business case
+npx saktum watch saktum-allowlist.json                          # monitor approved servers for changes (examples/saktum-watch.yml)
+npx saktum receipts export --otel receipts.otlp.json            # receipts as OpenTelemetry traces
+npx saktum attest saktum-report.json --vc                       # a W3C Verifiable Credential
+npx saktum roi --tokens-per-turn 32833 --agents 10              # the cost of tool definitions, and the savings
 npx saktum mcp                                                  # run Saktum as an MCP server for your coding agent
 npx saktum init my-server --lang ts                             # new server, trustworthy by default (or --lang py)
 npx saktum lint                                                 # static checks on tool definitions in your source

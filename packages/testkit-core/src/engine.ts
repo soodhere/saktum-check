@@ -11,7 +11,7 @@ import { sanitizeText } from "./safe.js";
 import { score, TRUST_WEIGHTS } from "./scoring.js";
 import type { Finding, LoadedPack, Result } from "./types.js";
 
-export const ENGINE_VERSION = "0.5.1";
+export const ENGINE_VERSION = "0.6.0";
 export const UNKNOWN_TOOL = "saktum_trust_check_no_such_tool";
 const INVALID_TOKEN = "saktum-check-deliberately-invalid-token";
 

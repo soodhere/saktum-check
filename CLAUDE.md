@@ -150,3 +150,8 @@ discovery questions including bounty interest). 152 tests. Bounty marketplace de
 Packaging rule (25 Nov 2026): saktum-index zips must never contain docs/ledger/ledger.jsonl or docs/passports/ (the
 ledger is append-only and lives only in the repository; copying a starter file over it once emptied the public ledger,
 restored from git history).
+
+## v0.6.0 (26 Nov 2026): plugs into what you run, and pays for itself
+watch (allowlist re-checks: changed tools, grade drops, unreachable; webhook; daily workflow template), receipts export
+--otel (OTLP/JSON, GenAI semconv execute_tool + saktum.* attributes), attest --vc and vc verify (W3C VC 2.0 as vc+jwt,
+EdDSA, did:key issuer), roi and the assessment business case (assumptions always shown). ADR 0012 interoperability. 157 tests.

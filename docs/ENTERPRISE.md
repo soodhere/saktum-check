@@ -51,6 +51,12 @@ In CI, the GitHub Action takes `policy: saktum-policy.yaml` (plus `sarif: "true"
   builds your allowlist from it, accepting only signers you trust.
 - The census report and the maturity model give an external benchmark.
 
+## Fits your existing tools
+
+Continuous monitoring of approved servers (`saktum watch`, as a daily workflow); agent receipts as **OpenTelemetry**
+traces for your observability and security tools; attestations as **W3C Verifiable Credentials** for identity and
+procurement systems; findings as **SARIF**; an SBOM with every release. See decision record 0012.
+
 ## 4. Agent identity and receipts (preview)
 
 Each agent gets its own identity (`saktum agent create`) and a mandate signed by its owner: allowed servers and tools,
