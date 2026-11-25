@@ -10,5 +10,8 @@ export default defineConfig({
       "@saktum/report": p("./packages/report/src/index.ts")
     }
   },
-  test: { include: ["test/**/*.test.ts"], testTimeout: 30000, hookTimeout: 30000 }
+  // Many tests start real server processes. Windows starts processes slowly (antivirus scans each one), so run fewer
+  // test files at once there and allow more time; CI and other systems keep full parallelism.
+  test: { include: ["test/**/*.test.ts"], testTimeout: process.platform === "win32" ? 60000 : 30000, hookTimeout: process.platform === "win32" ? 60000 : 30000,
+    ...(process.platform === "win32" ? { maxWorkers: 2, minWorkers: 1 } : {}) }
 });

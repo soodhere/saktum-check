@@ -15,6 +15,6 @@ export function startHttpFixture(name: "good" | "broken" | "malicious" | "oauth-
     const p = spawn(process.execPath, ["--import", "tsx", ...args, "--http", "0"], { cwd: root, stdio: ["ignore", "pipe", "inherit"] });
     p.stdout.on("data", (d: Buffer) => { const m = d.toString().match(/listening (\d+)/); if (m) resolve({ url: `http://127.0.0.1:${m[1]}/mcp`, stop: () => p.kill() }); });
     p.on("error", reject);
-    setTimeout(() => reject(new Error("fixture did not start")), 15000);
+    setTimeout(() => reject(new Error("fixture did not start")), process.platform === "win32" ? 45000 : 15000);
   });
 }
