@@ -287,3 +287,24 @@ export function consumeApproval(m: Mandate, requestId: string, path = DEFAULT_AP
   }
   return { ok: false };
 }
+
+// ---------- v0.8.1: agent maturity (A1-A5), earned from evidence like the server levels (L1-L5) ----------
+export function agentMaturity(m: Mandate & IntentMandate, o: { entries?: ReceiptLogEntry[]; verified?: boolean; chainValid?: boolean; revoked?: boolean } = {}) {
+  const op = checkOperator(m as never);
+  const tier = agentRiskTier(m).tier;
+  const bounded = Boolean(m.allow.tools?.length || m.actions?.length) && m.delegation !== true
+    && (!(tier === "R3" || tier === "R4") || Boolean(m.constraints?.length || m.approveAbove || m.rules?.length || m.approvalTriggers?.length || m.autonomy === "propose" || m.autonomy === "notify"));
+  const entries = o.entries ?? [];
+  const actions = entries.filter((e) => e.receipt.outcome === "allow" && e.result.status === "ok").length;
+  const outside = entries.filter((e) => String(e.result.code ?? "").startsWith("observed-")).length;
+  const explained = entries.length > 0 && o.verified === true && entries.every((e) => Boolean(e.result.code));
+  const steps = [
+    { level: 1, name: "Identified", met: checkMandate(m).ok, why: "its own identity and a valid mandate signed by its owner" },
+    { level: 2, name: "Accountable", met: (op.present && op.valid) || o.chainValid === true, why: "an operator countersignature or an identity chain to an organisation" },
+    { level: 3, name: "Bounded", met: bounded, why: "explicit tools or action classes, no sub-delegation, and caps or approvals when it can act irreversibly or spend" },
+    { level: 4, name: "Explained", met: explained, why: "signed, verified receipts with a reason for every decision" },
+    { level: 5, name: "Proven", met: actions >= 10 && outside === 0 && !o.revoked && explained, why: `a track record of at least 10 actions, none outside its mandate (${actions} so far)` }
+  ];
+  let level = 0; for (const st of steps) { if (!st.met) break; level = st.level; }
+  return { level, label: level ? `A${level} ${steps[level - 1]!.name}` : "Not yet identified", steps };
+}

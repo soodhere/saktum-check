@@ -189,3 +189,5 @@ agreements (draft by provider from DEFAULT_TERMS, accept by invoker countersigna
 (identity-chain), --agreement (no-valid-agreement, outside-agreement), --wallet (insufficient-credit); receipts carry
 metering. Contracts: credential, manifest, agreement, bounty (11 total). CLI: org, identity, manifest, catalog,
 agreement, wallet, usage, kpi, bounty validate. Demo story marketplace. 179 tests.
+v0.8.1: agent maturity A1-A5 (agentMaturity, evidence-based, shown in Agent Passports); marketplace demo mandate gains
+an approval threshold so it is Bounded; demo agents earn A4 (A5 needs a 10-action track record). 180 tests.

@@ -62,3 +62,11 @@ a substitution, an upgrade or a sponsored option, so "did it buy what I asked fo
 - **Data classes.** Arguments bound to `enterprise.data_class` (`data_class`, `classification`, `sensitivity`) are
   enforced like personal data: anything above `public` may only go to recipients named for that class in
   `dataSharing`, for example `{ "data": "confidential", "to": "External Auditor" }`.
+
+## Agent maturity (A1-A5)
+Like the server levels (L1-L5), an agent's level is earned from evidence, one level at a time, never a score:
+**A1 Identified** (its own identity and a valid mandate signed by its owner), **A2 Accountable** (an operator
+countersignature or an identity chain to an organisation), **A3 Bounded** (explicit tools or action classes, no
+sub-delegation, and caps or approvals when it can act irreversibly or spend), **A4 Explained** (signed, verified
+receipts with a reason for every decision), **A5 Proven** (at least 10 actions, none outside its mandate, not revoked).
+Every Agent Passport shows the level and which evidence is met.

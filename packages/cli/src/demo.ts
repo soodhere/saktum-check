@@ -7,7 +7,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { loadOrCreateKey } from "@saktum/sign";
 import { connect } from "@saktum/transports";
-import { acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, checkOperator, cosignMandate, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, describeMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type IntentMandate, type Mandate } from "@saktum/testkit-core";
+import { agentMaturity, acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, checkOperator, cosignMandate, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, describeMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type IntentMandate, type Mandate } from "@saktum/testkit-core";
 import { renderAgentPassport } from "@saktum/report";
 
 const PRODUCTS = [{ id: "oat-milk", name: "Oat milk 1 L", price: 4.49 }, { id: "bread", name: "Sourdough bread", price: 5.99 }, { id: "coffee", name: "Coffee beans 1 kg", price: 21.99 }];
@@ -171,7 +171,8 @@ async function runStory(dir: string, st: Story, owner: ReturnType<typeof loadOrC
   log("   Track record:"); for (const l of ts.lines) log(`     ${l}`);
   const html = join(dir, `${st.id}-passport.html`);
   writeFileSync(html, renderAgentPassport(m as never, checkMandate(m).ok ? { ok: true } : { ok: false }, { verified: verifyReceiptLog(entries).ok, summary: summariseReceipts(entries),
-    timeline: entries.map((e) => ({ tool: e.receipt.envelope.tool, outcome: e.receipt.outcome, status: e.result.status, repeated: false, why: [e.receipt.reason ?? "", ...(e.result.rationale?.preferences ?? []), ...(e.result.rationale?.flags ?? [])].filter(Boolean).join(" · ") })) }, agentRiskTier(m), describeMandate(m), { operator: (() => { const op = checkOperator(cm as never); return op.present && op.valid ? `${op.name} (${op.id})` : undefined; })(), track: ts.lines }));
+    timeline: entries.map((e) => ({ tool: e.receipt.envelope.tool, outcome: e.receipt.outcome, status: e.result.status, repeated: false, why: [e.receipt.reason ?? "", ...(e.result.rationale?.preferences ?? []), ...(e.result.rationale?.flags ?? [])].filter(Boolean).join(" · ") })) }, agentRiskTier(m), describeMandate(m), { operator: (() => { const op = checkOperator(cm as never); return op.present && op.valid ? `${op.name} (${op.id})` : undefined; })(), track: ts.lines,
+    maturity: agentMaturity(cm, { entries, verified: verifyReceiptLog(entries).ok }) }));
   log(`   ${entries.length} signed receipts \u00b7 ${verifyReceiptLog(entries).ok ? "verified" : "NOT verified"} \u00b7 passport: ${html}\n`);
   return html;
 }
@@ -202,7 +203,7 @@ async function runMarketplace(dir: string, log: (s: string) => void): Promise<st
   const wf = join(dir, "market-wallet.json");
   topUp(wf, acme.kid, 12);
   log(`   \u2713 Acme tops up 12 prepaid tokens (bought outside Saktum; no money is handled here)`);
-  const m = cosignMandate(createMandate({ agentId: agent.kid, agentName: "Acme shopping agent", ownerName: "Priya", purpose: "Weekly office groceries", tools: gm.capabilities.map((c) => c.tool), destructive: false, expires: exp, autonomy: "act" } as never, priya), acme, "Acme Corp");
+  const m = cosignMandate(createMandate({ agentId: agent.kid, agentName: "Acme shopping agent", ownerName: "Priya", purpose: "Weekly office groceries", tools: gm.capabilities.map((c) => c.tool), destructive: false, expires: exp, autonomy: "act", approveAbove: { arg: "amount", value: 50 } } as never, priya), acme, "Acme Corp");
   const mf = w("market-mandate.json", m), rf = join(dir, "market-receipts.jsonl"), revf = join(dir, "market-revoked-credentials.json");
   writeFileSync(revf, "[]");
   const open = () => connect({ kind: "stdio", command: process.execPath, args: [...self, "proxy", "--mandate", mf, "--agent-key", join(dir, "market-agent-key.json"), "--enforce", "--receipts", rf,
@@ -237,7 +238,7 @@ async function runMarketplace(dir: string, log: (s: string) => void): Promise<st
   const html = join(dir, "marketplace-passport.html");
   const ts = trustStatement(all, verifyReceiptLog(all).ok);
   writeFileSync(html, renderAgentPassport(m as never, { ok: true }, { verified: verifyReceiptLog(all).ok, summary: summariseReceipts(all), timeline: all.map((e) => ({ tool: e.receipt.envelope.tool, outcome: e.receipt.outcome, status: e.result.status, repeated: false, why: [e.receipt.reason ?? "", e.result.metering ? `${e.result.metering.tokens} token(s), balance ${e.result.metering.balance}` : ""].filter(Boolean).join(" \u00b7 ") })) },
-    agentRiskTier(m), [`Weekly office groceries for Acme Corp, under agreement ${ag.id} with Demo Grocer.`, `Accountable: ${verifyChain(agentCred).path.join(" \u2192 ")}.`, "Paid per call in prepaid tokens."], { operator: "Acme Corp", track: ts.lines }));
+    agentRiskTier(m), [`Weekly office groceries for Acme Corp, under agreement ${ag.id} with Demo Grocer.`, `Accountable: ${verifyChain(agentCred).path.join(" \u2192 ")}.`, "Paid per call in prepaid tokens."], { operator: "Acme Corp", track: ts.lines, maturity: agentMaturity(m as never, { entries: all, verified: verifyReceiptLog(all).ok, chainValid: verifyChain(agentCred).valid }) }));
   log(`   ${all.length} signed receipts \u00b7 ${verifyReceiptLog(all).ok ? "verified" : "NOT verified"} \u00b7 passport: ${html}\n`);
   return html;
 }

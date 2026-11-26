@@ -67,3 +67,15 @@ describe("saktum demo --story marketplace", () => {
     for (const s of ["Acme Corp \u2192 Priya (procurement lead) \u2192 Acme shopping agent", "signed by Demo Grocer and Acme Corp (verified)", "balance 0", "insufficient-credit", "total 12 tokens", "Acme 0 tokens, Demo Grocer 12 tokens", "identity-chain", "verified \u00b7 passport"]) expect(out).toContain(s);
   }, 240_000);
 });
+
+describe("agent maturity (A1-A5)", () => {
+  it("is earned level by level from evidence, never skipping a level", async () => {
+    const { createMandate, cosignMandate, agentMaturity } = await import("@saktum/testkit-core");
+    const owner = generateSigningKey(), op = generateSigningKey(), ag = generateSigningKey();
+    const base = createMandate({ agentId: ag.kid, agentName: "B", destructive: false, expires: exp, tools: ["search_products"] }, owner);
+    expect(agentMaturity(base).level).toBe(1);
+    const signed = cosignMandate(base, op, "Op");
+    expect(agentMaturity(signed as never).label).toBe("A3 Bounded");
+    expect(agentMaturity(createMandate({ agentId: ag.kid, agentName: "B", destructive: false, expires: exp }, owner)).level).toBe(1);
+  });
+});
