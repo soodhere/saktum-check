@@ -20,8 +20,8 @@ your environment.
 Run on engineering machines (for example through your device-management tool), then merge:
 
 ```
-npx -y saktum@0.4.0 scan-config --yes --machine "$HOSTNAME" --out setup.json   # per machine
-npx -y saktum@0.4.0 fleet setups/*.json --policy saktum-policy.yaml --html inventory.html --out inventory.json
+npx -y saktum@latest scan-config --yes --machine "$HOSTNAME" --out setup.json   # per machine
+npx -y saktum@latest fleet setups/*.json --policy saktum-policy.yaml --html inventory.html --out inventory.json
 ```
 
 `scan-config --yes` starts each configured server with the settings already in that machine's configuration and checks it
