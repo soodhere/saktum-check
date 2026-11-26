@@ -11,7 +11,7 @@ describe("contracts", () => {
       const ok = v(JSON.parse(readFileSync(contractsDir + "examples/" + ex, "utf8")));
       expect(ok, `${ex}: ${JSON.stringify(v.errors)}`).toBe(true);
     }
-    expect(readdirSync(contractsDir).filter((f) => f.endsWith(".schema.json")).length).toBe(7);
+    expect(readdirSync(contractsDir).filter((f) => f.endsWith(".schema.json")).length).toBe(11);
   });
   it("all bundled packs validate against the pack contract", () => {
     const packs = loadPackDir(root + "packs");

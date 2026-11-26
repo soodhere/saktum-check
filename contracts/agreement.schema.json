@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/contracts/agreement.schema.json",
+  "title": "agreement.schema.json",
+  "type": "object",
+  "required": [
+    "agreementFormat",
+    "id",
+    "template",
+    "purpose",
+    "provider",
+    "invoker",
+    "scope",
+    "rates",
+    "terms",
+    "validFrom",
+    "validUntil",
+    "signature"
+  ],
+  "properties": {
+    "agreementFormat": {
+      "const": "0.1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^agr_"
+    },
+    "template": {
+      "type": "string"
+    },
+    "purpose": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "provider": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:key:"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "domain": {
+          "type": "string",
+          "maxLength": 253
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "manifest": {
+          "type": "string"
+        }
+      }
+    },
+    "invoker": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:key:"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "domain": {
+          "type": "string",
+          "maxLength": 253
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "manifest": {
+          "type": "string"
+        }
+      }
+    },
+    "scope": {
+      "type": "object"
+    },
+    "rates": {
+      "type": "object",
+      "required": [
+        "perCall"
+      ],
+      "properties": {
+        "perCall": {
+          "type": "number",
+          "minimum": 0
+        },
+        "perTool": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object"
+    },
+    "terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "specificTerms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dataTerms": {
+      "type": "string"
+    },
+    "disputeContact": {
+      "type": "string"
+    },
+    "validFrom": {
+      "type": "string"
+    },
+    "validUntil": {
+      "type": "string"
+    },
+    "signature": {
+      "type": "object",
+      "required": [
+        "kid"
+      ]
+    },
+    "countersignature": {
+      "type": "object",
+      "required": [
+        "by",
+        "agreement",
+        "signature"
+      ]
+    }
+  }
+}

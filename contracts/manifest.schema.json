@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/contracts/manifest.schema.json",
+  "title": "manifest.schema.json",
+  "type": "object",
+  "required": [
+    "manifestFormat",
+    "id",
+    "publisher",
+    "server",
+    "categories",
+    "intents",
+    "capabilities",
+    "rates",
+    "issuedAt",
+    "signature"
+  ],
+  "properties": {
+    "manifestFormat": {
+      "const": "0.1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^man_"
+    },
+    "publisher": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:key:"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "domain": {
+          "type": "string",
+          "maxLength": 253
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "manifest": {
+          "type": "string"
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "intents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+:[a-z]+$"
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tool",
+          "action",
+          "fields"
+        ]
+      }
+    },
+    "rates": {
+      "type": "object",
+      "required": [
+        "perCall"
+      ],
+      "properties": {
+        "perCall": {
+          "type": "number",
+          "minimum": 0
+        },
+        "perTool": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "quality": {
+      "type": "object"
+    },
+    "documentation": {
+      "type": "string"
+    },
+    "bounties": {
+      "type": "array"
+    },
+    "issuedAt": {
+      "type": "string"
+    },
+    "signature": {
+      "type": "object",
+      "required": [
+        "kid"
+      ]
+    }
+  }
+}

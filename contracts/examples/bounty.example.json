@@ -1,0 +1,35 @@
+{
+  "bountyFormat": "0.1",
+  "id": "bty_example",
+  "sponsor": {
+    "id": "did:key:z6MkExampleSponsor",
+    "name": "Example Payments"
+  },
+  "target": {
+    "manifest": "man_example"
+  },
+  "intent": "Find ways an agent can move money outside its mandate",
+  "scope": [
+    "pay_invoice",
+    "refund"
+  ],
+  "prequalification": [
+    "verified identity",
+    "agreed researcher terms"
+  ],
+  "success": [
+    "a reproducible call that moves money without a valid mandate, with receipts"
+  ],
+  "failure": [
+    "findings outside scope",
+    "testing against production without consent"
+  ],
+  "reward": {
+    "tokens": 500
+  },
+  "disclosure": "Report privately; 90-day disclosure; testing only against the sponsor's sandbox",
+  "status": "draft",
+  "signature": {
+    "kid": "did:key:z6MkExampleSponsor"
+  }
+}

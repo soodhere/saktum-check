@@ -180,3 +180,12 @@ v0.7.0 final additions (unreleased until now, so folded in): enterprise data cla
 through dataSharing like personal data), signed single-use approvals of exactly one action (approvalRequestId over
 mandate digest, tool and argument digest; agent approve; proxy --approvals; receipts record "approved by"), mandate
 digest normalised through JSON, finance demo story. All seven board questions (Snowflake ebook list) answered. 174 tests.
+
+## v0.8.0 (28 Nov 2026): from trust to a marketplace (the October vision's market half)
+market.ts: identity chains (organisationRoot, issueCredential signed without chain then chain attached, verifyChain link
+by link, findOrphans), manifests (intents from action classes and bindings; signed by publisher) and searchCatalogue,
+agreements (draft by provider from DEFAULT_TERMS, accept by invoker countersignature, verifyAgreement), wallet
+(double-entry prepaid tokens; chargeCall refuses on insufficient credit), usageStatement, kpis. Proxy: --credential
+(identity-chain), --agreement (no-valid-agreement, outside-agreement), --wallet (insufficient-credit); receipts carry
+metering. Contracts: credential, manifest, agreement, bounty (11 total). CLI: org, identity, manifest, catalog,
+agreement, wallet, usage, kpi, bounty validate. Demo story marketplace. 179 tests.

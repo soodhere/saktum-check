@@ -7,9 +7,9 @@ import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 import { randomUUID } from "node:crypto";
 import type { SigningKey } from "@saktum/sign";
-import { approvalRequestId, argumentsHash, capabilityProfile, chainEntry, consumeApproval, decideCall, decideIntent, hasIntent, parseReceiptLog, revocationOf, signReceipt, type Mandate, type ReceiptLogEntry, type ToolAnnotations } from "@saktum/testkit-core";
+import { chargeCall, verifyAgreement, verifyChain, type Agreement, type Credential, approvalRequestId, argumentsHash, capabilityProfile, chainEntry, consumeApproval, decideCall, decideIntent, hasIntent, parseReceiptLog, revocationOf, signReceipt, type Mandate, type ReceiptLogEntry, type ToolAnnotations } from "@saktum/testkit-core";
 
-export interface ProxyOptions { approvalsPath?: string; revocationsPath?: string; command: string; args: string[]; receiptsPath: string; agentKey: SigningKey; mandate?: Mandate; enforce: boolean; log?: (s: string) => void }
+export interface ProxyOptions { credential?: Credential; revokedCredentials?: string[]; agreement?: Agreement; walletPath?: string; approvalsPath?: string; revocationsPath?: string; command: string; args: string[]; receiptsPath: string; agentKey: SigningKey; mandate?: Mandate; enforce: boolean; log?: (s: string) => void }
 
 export async function runProxy(o: ProxyOptions): Promise<number> {
   mkdirSync(dirname(o.receiptsPath), { recursive: true });
@@ -27,7 +27,7 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
   const annotations = new Map<string, ToolAnnotations>();
   const toolDefs = new Map<string, { name: string; description?: string; inputSchema?: unknown; annotations?: ToolAnnotations }>();
   const pendingKinds = new Map<string, "initialize" | "tools/list">();
-  const calls = new Map<string, { tool: string; argsHash: string; start: number; reason: string; destructive: boolean; code: string; values: Record<string, string | number>; rationale?: ReceiptLogEntry["result"]["rationale"] }>();
+  const calls = new Map<string, { tool: string; argsHash: string; start: number; reason: string; destructive: boolean; code: string; values: Record<string, string | number>; rationale?: ReceiptLogEntry["result"]["rationale"]; metering?: ReceiptLogEntry["result"]["metering"] }>();
   const key = (id: unknown) => JSON.stringify(id);
   const isDestructive = (a: ToolAnnotations) => a?.destructiveHint === true || (a?.readOnlyHint === false && a?.destructiveHint !== false);
 
@@ -74,6 +74,23 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
         if (ap.ok) d = { allow: true, code: "ok", reason: `approved by ${ap.by} (${rid}), after: ${d.reason}` };
         else d = { ...d, reason: `${d.reason} [approval request ${rid}]` };
       }
+      if (d.allow && o.credential) {
+        const vc = verifyChain(o.credential, { revoked: o.revokedCredentials });
+        const root = [...(o.credential.chain ?? []), o.credential][0]!.subject.id;
+        if (!vc.valid) d = { allow: false, code: "identity-chain", reason: `the agent's accountability chain is broken: ${vc.reason}` };
+        else if (o.agreement && root !== o.agreement.invoker.id) d = { allow: false, code: "identity-chain", reason: "the agent's organisation is not the party to the agreement" };
+      }
+      let metering: { agreement: string; tokens: number; balance: number } | undefined;
+      if (d.allow && o.agreement) {
+        const va = verifyAgreement(o.agreement);
+        if (!va.valid) d = { allow: false, code: "no-valid-agreement", reason: `no valid agreement with the provider: ${va.reason}` };
+        else if (o.agreement.scope.tools && !o.agreement.scope.tools.includes(tool)) d = { allow: false, code: "outside-agreement", reason: `${tool} is outside the agreement ${o.agreement.id}` };
+        else if (o.walletPath) {
+          const ch = chargeCall(o.walletPath, o.agreement, tool, `${o.agreement.id}:${tool}`);
+          if (!ch.ok) d = { allow: false, code: "insufficient-credit", reason: `${tool} costs ${ch.tokens} tokens; the prepaid balance is ${ch.balance}` };
+          else metering = { agreement: o.agreement.id, tokens: ch.tokens, balance: ch.balance };
+        } else metering = { agreement: o.agreement.id, tokens: o.agreement.rates.perTool?.[tool] ?? o.agreement.rates.perCall, balance: -1 };
+      }
       if (!d.allow && o.enforce) {
         const hint = d.code === "revoked" ? " The agent's owner stopped it; do not retry." : d.code === "approval-needed" ? " Ask your user to approve it (saktum agent approve with the request id), then retry the same action once." : d.code === "notify-only" ? " Tell your user what you found instead." : " Ask the agent's owner to change the mandate if this action is needed.";
         process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { isError: true, content: [{ type: "text", text: `Blocked by Saktum (${d.code}): ${d.reason}.${hint}` }] } }) + "\n");
@@ -82,7 +99,7 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
         return;
       }
       const code = !d.allow ? `observed-${d.code}` : ann?.readOnlyHint === true ? "ok-read" : "ok-action";
-      calls.set(key(msg.id), { tool, argsHash, start: Date.now(), reason: d.allow ? d.reason : `outside the mandate (observed, not blocked): ${d.reason}`, destructive: isDestructive(ann), code, values, rationale });
+      calls.set(key(msg.id), { tool, argsHash, start: Date.now(), reason: d.allow ? d.reason : `outside the mandate (observed, not blocked): ${d.reason}`, destructive: isDestructive(ann), code, values, rationale, metering });
     }
     child.stdin.write(line + "\n");
   });
@@ -103,7 +120,7 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
     if (c) {
       calls.delete(k);
       const status = msg.error ? "protocol-error" : msg.result?.isError ? "tool-error" : "ok";
-      record(c.tool, c.argsHash, msg.error ? "error" : "allow", c.reason, { status, latencyMs: Date.now() - c.start, destructive: c.destructive, code: c.code, values: c.values, ...(c.rationale ? { rationale: c.rationale } : {}) });
+      record(c.tool, c.argsHash, msg.error ? "error" : "allow", c.reason, { status, latencyMs: Date.now() - c.start, destructive: c.destructive, code: c.code, values: c.values, ...(c.rationale ? { rationale: c.rationale } : {}), ...(c.metering ? { metering: c.metering } : {}) });
     }
     process.stdout.write(line + "\n");
   });

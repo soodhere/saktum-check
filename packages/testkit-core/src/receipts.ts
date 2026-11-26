@@ -9,7 +9,7 @@ export interface Receipt {
   outcome: "allow" | "deny" | "error"; reason?: string; issuedAt: string; signatures: Signature[];
 }
 export interface ReceiptLogEntry { seq: number; receipt: Receipt; result: { status: "ok" | "tool-error" | "protocol-error" | "blocked" | "no-response"; latencyMs?: number; destructive?: boolean; code?: string; values?: Record<string, string | number>;
-    rationale?: { evaluated: { rule: string; ok: boolean }[]; preferences: string[]; flags: string[] } }; prevHash: string; entryHash: string }
+    rationale?: { evaluated: { rule: string; ok: boolean }[]; preferences: string[]; flags: string[] }; metering?: { agreement: string; tokens: number; balance: number } }; prevHash: string; entryHash: string }
 export const RECEIPTS_GENESIS = "sha256:genesis";
 
 export const argumentsHash = (args: unknown) => sha256Tag(canonicalize(args ?? {}));

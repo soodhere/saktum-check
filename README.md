@@ -11,6 +11,14 @@ npx saktum check https://your-server.example/mcp     # a remote server (sign-in 
 
 Runs on your machine. Nothing is uploaded. Your own environment variables are never passed to the server.
 
+## From trust to a marketplace (v0.8)
+
+Every agent traceable to a person and an organisation (**identity chains**, with orphan detection); publishers sign
+**manifests** and agents find tools **by intent** in a catalogue; providers and invokers sign **agreements** from a
+default template plus specific terms; every call is **metered in prepaid tokens** (double-entry, no money handled), and
+calls stop when credit runs out; **usage statements** and **KPIs** come from the signed receipts. Guide:
+[docs/MARKETPLACE.md](docs/MARKETPLACE.md). Try: `npx saktum demo --story marketplace`.
+
 ## Agents that follow instructions (v0.7)
 
 Mandates now carry **intent**: purpose, autonomy per action, rules, ranked preferences, substitution and upsell
@@ -201,7 +209,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.7.0
+- uses: soodhere/saktum-check@v0.8.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://saktum.dev/contracts/bounty.schema.json",
+  "title": "bounty.schema.json",
+  "type": "object",
+  "required": [
+    "bountyFormat",
+    "id",
+    "sponsor",
+    "target",
+    "intent",
+    "scope",
+    "prequalification",
+    "success",
+    "failure",
+    "reward",
+    "disclosure",
+    "status"
+  ],
+  "properties": {
+    "bountyFormat": {
+      "const": "0.1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "sponsor": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:key:"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "domain": {
+          "type": "string",
+          "maxLength": 253
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "manifest": {
+          "type": "string"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "description": "the manifest or server under test"
+    },
+    "intent": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prequalification": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "who may take part (for example verified identity, prior findings)"
+    },
+    "success": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failure": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reward": {
+      "type": "object",
+      "required": [
+        "tokens"
+      ],
+      "properties": {
+        "tokens": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "disclosure": {
+      "type": "string",
+      "description": "responsible-disclosure and safe-harbour terms"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "open",
+        "in-review",
+        "paid",
+        "closed"
+      ]
+    },
+    "signature": {
+      "type": "object",
+      "required": [
+        "kid"
+      ]
+    }
+  }
+}

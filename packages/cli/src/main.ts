@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { passportSlug, renderAgentPassport, renderAssessment, renderLedgerPassport, renderPassportGallery, renderServerPassport, badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { actionClass, bindingsFor, describeMandate, attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, approveAction, checkOperator, cosignMandate, revocationOf, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { actionClass, bindingsFor, describeMandate, attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, type Agreement, type Credential, type Manifest, approveAction, checkOperator, cosignMandate, revocationOf, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
@@ -549,7 +549,11 @@ export async function main(argv = process.argv): Promise<number> {
     .option("--receipts <file>", "receipt log (append-only, hash-chained)")
     .option("--revocations <file>", "revocation list to honour (default ~/.saktum/revocations.json)")
     .option("--approvals <file>", "signed approvals to honour (default ~/.saktum/approvals.json)")
-    .action(async (parts: string[], o: { mandate?: string; agentKey: string; enforce: boolean; receipts?: string; revocations?: string; approvals?: string }) => {
+    .option("--credential <file>", "the agent's credential: its accountability chain is verified on every call")
+    .option("--revoked-credentials <file>", "JSON list of revoked credential ids")
+    .option("--agreement <file>", "the signed agreement with the provider: calls outside it are refused and every call is metered")
+    .option("--wallet <file>", "prepaid token wallet charged per call under the agreement")
+    .action(async (parts: string[], o: { mandate?: string; agentKey: string; enforce: boolean; receipts?: string; revocations?: string; approvals?: string; credential?: string; revokedCredentials?: string; agreement?: string; wallet?: string }) => {
       const { homedir } = await import("node:os");
       const { join } = await import("node:path");
       let mandate: Mandate | undefined;
@@ -557,7 +561,9 @@ export async function main(argv = process.argv): Promise<number> {
       const agentKey = loadOrCreateKey(o.agentKey);
       if (mandate && agentKey.kid !== mandate.agent.id) throw new Error("The agent key does not match the mandate's agent.");
       const { runProxy } = await import("./proxy.js");
-      exitCode = await runProxy({ command: parts[0]!, args: parts.slice(1), receiptsPath: o.receipts ?? join(homedir(), ".saktum", "receipts.jsonl"), agentKey, mandate, enforce: o.enforce, ...(o.revocations ? { revocationsPath: o.revocations } : {}), ...(o.approvals ? { approvalsPath: o.approvals } : {}), log: (m) => process.stderr.write(`saktum: ${m}\n`) });
+      exitCode = await runProxy({ command: parts[0]!, args: parts.slice(1), receiptsPath: o.receipts ?? join(homedir(), ".saktum", "receipts.jsonl"), agentKey, mandate, enforce: o.enforce, ...(o.revocations ? { revocationsPath: o.revocations } : {}), ...(o.approvals ? { approvalsPath: o.approvals } : {}),
+        ...(o.credential ? { credential: JSON.parse(readFileSync(o.credential, "utf8")) as Credential } : {}), ...(o.revokedCredentials ? { revokedCredentials: JSON.parse(readFileSync(o.revokedCredentials, "utf8")) as string[] } : {}),
+        ...(o.agreement ? { agreement: JSON.parse(readFileSync(o.agreement, "utf8")) as Agreement } : {}), ...(o.wallet ? { walletPath: o.wallet } : {}), log: (m) => process.stderr.write(`saktum: ${m}\n`) });
     });
 
   const receipts = program.command("receipts").description("Signed receipts of agent tool calls (from saktum proxy)");
@@ -739,10 +745,118 @@ export async function main(argv = process.argv): Promise<number> {
       }
     });
 
+  const org = program.command("org").description("Organisations: the root of every accountability chain");
+  org.command("init").description("Create your organisation's root identity credential")
+    .requiredOption("--name <name>", "organisation name").option("--domain <domain>", "the organisation's domain")
+    .option("--key <path>", "the organisation's signing key (created if missing)", "saktum-org-key.json").option("--expires <date>", "YYYY-MM-DD", new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10))
+    .option("--out <file>", "credential file", "org-credential.json")
+    .action((o: { name: string; domain?: string; key: string; expires: string; out: string }) => {
+      const c = organisationRoot({ name: o.name, domain: o.domain, expires: o.expires }, loadOrCreateKey(o.key));
+      writeFileSync(o.out, JSON.stringify(c, null, 2) + "\n");
+      process.stdout.write(`Organisation ${sanitizeText(o.name, 80)}: ${c.subject.id}. Root credential ${c.id} in ${sanitizeText(o.out)}.\n`);
+    });
+  const identity = program.command("identity").description("Identity chains: organisation -> people -> agents");
+  identity.command("issue").description("Issue a credential to a person or an agent, from your own credential")
+    .requiredOption("--from <credential>", "your credential (the organisation's, or one it issued to you)").requiredOption("--key <path>", "your signing key")
+    .requiredOption("--type <type>", "member or agent").requiredOption("--name <name>", "the subject's name")
+    .option("--subject-key <path>", "the subject's key file (its id is used)").option("--subject <did>", "the subject's did:key")
+    .option("--role <role>", "role, for a member").option("--expires <date>", "YYYY-MM-DD", new Date(Date.now() + 180 * 864e5).toISOString().slice(0, 10)).option("--out <file>", "credential file", "credential.json")
+    .action((o: { from: string; key: string; type: string; name: string; subjectKey?: string; subject?: string; role?: string; expires: string; out: string }) => {
+      const subject = o.subject ?? (o.subjectKey ? loadOrCreateKey(o.subjectKey).kid : undefined);
+      if (!subject) throw new Error("Give --subject <did:key> or --subject-key <file>.");
+      const c = issueCredential(JSON.parse(readFileSync(o.from, "utf8")) as Credential, loadOrCreateKey(o.key), { type: o.type as "member" | "agent", id: subject, name: o.name, role: o.role, expires: o.expires });
+      writeFileSync(o.out, JSON.stringify(c, null, 2) + "\n");
+      process.stdout.write(`Issued ${c.id} to ${sanitizeText(o.name, 80)} (${o.type}). Chain: ${verifyChain(c).path.join(" -> ")}\n`);
+    });
+  identity.command("verify").description("Walk a credential's chain to its organisation").argument("<credential>")
+    .option("--revoked <file>", "JSON list of revoked credential ids")
+    .action((f: string, o: { revoked?: string }) => {
+      const v = verifyChain(JSON.parse(readFileSync(f, "utf8")) as Credential, { revoked: o.revoked ? JSON.parse(readFileSync(o.revoked, "utf8")) : [] });
+      process.stdout.write(v.valid ? `\u2713 ${v.path.join(" -> ")}: accountable organisation ${v.organisation}\n` : `\u2717 ${v.reason}\n`);
+      exitCode = v.valid ? 0 : 1;
+    });
+  identity.command("orphans").description("Agents whose accountability chain is broken (expired, revoked or invalid)").argument("<credentials...>")
+    .option("--revoked <file>", "JSON list of revoked credential ids")
+    .action((fs: string[], o: { revoked?: string }) => {
+      const orphans = findOrphans(fs.map((f) => JSON.parse(readFileSync(f, "utf8")) as Credential), { revoked: o.revoked ? JSON.parse(readFileSync(o.revoked, "utf8")) : [] });
+      for (const x of orphans) process.stdout.write(`\u2717 ${sanitizeText(x.agent, 80)} (${x.id}): ${x.reason}\n`);
+      process.stdout.write(`${orphans.length} orphaned agent(s).\n`);
+      exitCode = orphans.length ? 1 : 0;
+    });
+  const manifest = program.command("manifest").description("What a server offers, signed by its publisher");
+  manifest.command("create").description("Build and sign a manifest from a server's tools (with its grades and risk tier)")
+    .argument("<target...>", "https://host/mcp  or  -- node server.js").requiredOption("--publisher <name>", "publishing organisation").option("--domain <domain>")
+    .option("--key <path>", "the publisher's signing key", "saktum-publisher-key.json").option("--per-call <tokens>", "default tokens per call", "1")
+    .option("--rate <tool=tokens>", "tokens for one tool (repeatable)", collect, [] as string[]).option("--out <file>", "manifest file", "saktum-manifest.json")
+    .action(async (parts: string[], o: { publisher: string; domain?: string; key: string; perCall: string; rate: string[]; out: string }) => {
+      const target = parseTarget(parts);
+      const packs = existsSync(bundledPacks) ? loadPackDir(bundledPacks) : loadEmbeddedPacks();
+      let tools: never[] = [];
+      const r = await runTrustCheck(target, { packs, onTools: (t) => { tools = t as never[]; } });
+      const perTool = Object.fromEntries(o.rate.map((x) => { const [t, n] = x.split("="); return [t!, Number(n)]; }));
+      const m = buildManifest({ publisher: { name: o.publisher, ...(o.domain ? { domain: o.domain } : {}) }, server: { name: String(r.target.serverInfo?.["name"] ?? "server"), version: String(r.target.serverInfo?.["version"] ?? ""), toolsFingerprint: r.target.toolsFingerprint },
+        tools, rates: { perCall: Number(o.perCall), ...(o.rate.length ? { perTool } : {}) }, quality: { trustGrade: r.grade ?? null, readinessGrade: r.readiness?.grade ?? null, riskTier: r.riskTier?.tier } }, loadOrCreateKey(o.key));
+      writeFileSync(o.out, JSON.stringify(m, null, 2) + "\n");
+      process.stdout.write(`Manifest ${m.id} for ${sanitizeText(m.server.name, 80)}: intents ${m.intents.join(", ")}; trust ${r.grade ?? "-"}, readiness ${r.readiness?.grade ?? "-"}, risk ${r.riskTier?.tier ?? "-"}.\n`);
+    });
+  const catalog = program.command("catalog").description("A catalogue of signed manifests, searchable by intent");
+  catalog.command("add").argument("<manifest>").option("--catalog <file>", "catalogue file", "saktum-catalog.json")
+    .action((f: string, o: { catalog: string }) => {
+      const m = JSON.parse(readFileSync(f, "utf8")) as Manifest;
+      if (!verifyDocument(m as never).valid) throw new Error("The manifest's signature is not valid.");
+      const c: Manifest[] = existsSync(o.catalog) ? JSON.parse(readFileSync(o.catalog, "utf8")) : [];
+      writeFileSync(o.catalog, JSON.stringify([...c.filter((x) => x.server.name !== m.server.name || x.publisher.id !== m.publisher.id), m], null, 2) + "\n");
+      process.stdout.write(`Added ${sanitizeText(m.server.name, 80)} by ${sanitizeText(m.publisher.name, 80)} to ${sanitizeText(o.catalog)}.\n`);
+    });
+  catalog.command("search").argument("<query...>").option("--catalog <file>", "catalogue file", "saktum-catalog.json").option("--max-risk <tier>", "only servers at or below this risk tier")
+    .action((q: string[], o: { catalog: string; maxRisk?: string }) => {
+      const res = searchCatalogue(JSON.parse(readFileSync(o.catalog, "utf8")) as Manifest[], q.join(" "), { maxRisk: o.maxRisk });
+      for (const r of res.slice(0, 10)) process.stdout.write(`${String(r.score).padStart(3)}  ${sanitizeText(r.manifest.server.name, 40).padEnd(24)} ${sanitizeText(r.manifest.publisher.name, 40).padEnd(20)} trust ${r.manifest.quality?.trustGrade ?? "-"} \u00b7 risk ${r.manifest.quality?.riskTier ?? "-"} \u00b7 ${r.matched.join(", ")}\n`);
+      if (!res.length) process.stdout.write("No match.\n");
+    });
+  const agreement = program.command("agreement").description("Agreements between providers and invokers (smart contracts as signed documents)");
+  agreement.command("draft").description("As the provider, draft and sign an agreement from the default template")
+    .requiredOption("--manifest <file>").requiredOption("--invoker-name <name>").requiredOption("--invoker <did>", "the invoker organisation's id").requiredOption("--purpose <text>")
+    .option("--tools <list>", "comma-separated tools in scope").option("--tokens-per-month <n>").option("--term <text>", "a specific term (repeatable)", collect, [] as string[])
+    .option("--valid-until <date>", "YYYY-MM-DD", new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10)).option("--key <path>", "the provider's key", "saktum-publisher-key.json").option("--out <file>", "agreement file", "saktum-agreement.json")
+    .action((o: { manifest: string; invokerName: string; invoker: string; purpose: string; tools?: string; tokensPerMonth?: string; term: string[]; validUntil: string; key: string; out: string }) => {
+      const a = draftAgreement({ manifest: JSON.parse(readFileSync(o.manifest, "utf8")), invoker: { id: o.invoker, name: o.invokerName }, purpose: o.purpose, tools: o.tools?.split(",").map((x) => x.trim()), tokensPerMonth: o.tokensPerMonth ? Number(o.tokensPerMonth) : undefined, specificTerms: o.term, validUntil: o.validUntil }, loadOrCreateKey(o.key));
+      writeFileSync(o.out, JSON.stringify(a, null, 2) + "\n");
+      process.stdout.write(`Drafted ${a.id} (${a.terms.length} default terms, ${a.specificTerms?.length ?? 0} specific), signed by the provider. The invoker accepts with: npx saktum agreement accept ${sanitizeText(o.out)} --key <invoker-key>\n`);
+    });
+  agreement.command("accept").argument("<agreement>").requiredOption("--key <path>", "the invoker's key")
+    .action((f: string, o: { key: string }) => { const a = acceptAgreement(JSON.parse(readFileSync(f, "utf8")), loadOrCreateKey(o.key)); writeFileSync(f, JSON.stringify(a, null, 2) + "\n"); process.stdout.write(`Accepted ${a.id}: signed by both parties.\n`); });
+  agreement.command("verify").argument("<agreement>")
+    .action((f: string) => { const a = JSON.parse(readFileSync(f, "utf8")) as Agreement; const v = verifyAgreement(a); process.stdout.write(v.valid ? `\u2713 ${a.id}: ${sanitizeText(a.provider.name, 80)} and ${sanitizeText(a.invoker.name, 80)}, until ${a.validUntil}.\n` : `\u2717 ${v.reason}\n`); exitCode = v.valid ? 0 : 1; });
+  const wallet = program.command("wallet").description("Prepaid tokens (bought outside Saktum; no money is handled here)");
+  wallet.command("topup").requiredOption("--account <id>").requiredOption("--tokens <n>").option("--wallet <file>", "wallet file", "saktum-wallet.json")
+    .action((o: { account: string; tokens: string; wallet: string }) => { process.stdout.write(`Balance of ${sanitizeText(o.account, 80)}: ${topUp(o.wallet, o.account, Number(o.tokens))} tokens.\n`); });
+  wallet.command("balance").requiredOption("--account <id>").option("--wallet <file>", "wallet file", "saktum-wallet.json")
+    .action((o: { account: string; wallet: string }) => { process.stdout.write(`${walletBalance(o.wallet, o.account)} tokens\n`); });
+  program.command("usage").description("A usage statement for an agreement, from the receipts (optionally signed)")
+    .requiredOption("--agreement <file>").argument("[receipts]").option("--key <path>", "sign the statement with this key").option("--out <file>")
+    .action(async (f: string | undefined, o: { agreement: string; key?: string; out?: string }) => {
+      const { homedir } = await import("node:os"); const { join } = await import("node:path");
+      const st = usageStatement(parseReceiptLog(readFileSync(f ?? join(homedir(), ".saktum", "receipts.jsonl"), "utf8")), JSON.parse(readFileSync(o.agreement, "utf8")), o.key ? loadOrCreateKey(o.key) : undefined) as { lines: { tool: string; calls: number; tokens: number }[]; totalTokens: number };
+      for (const l of st.lines) process.stdout.write(`${sanitizeText(l.tool, 60).padEnd(24)} ${String(l.calls).padStart(5)} calls ${String(l.tokens).padStart(7)} tokens\n`);
+      process.stdout.write(`Total: ${st.totalTokens} tokens\n`);
+      if (o.out) writeFileSync(o.out, JSON.stringify(st, null, 2) + "\n");
+    });
+  program.command("kpi").description("KPIs over receipts: calls, outcomes, approvals, tokens, latency, by tool").argument("[receipts]")
+    .option("--tool <name>").option("--agent <did>").option("--since <date>")
+    .action(async (f: string | undefined, o: { tool?: string; agent?: string; since?: string }) => {
+      const { homedir } = await import("node:os"); const { join } = await import("node:path");
+      const k = kpis(parseReceiptLog(readFileSync(f ?? join(homedir(), ".saktum", "receipts.jsonl"), "utf8")), o);
+      process.stdout.write(`Calls ${k.calls} \u00b7 allowed ${k.allowed} \u00b7 blocked ${k.blocked} \u00b7 approved ${k.approvals} \u00b7 tokens ${k.tokens} \u00b7 latency p50 ${k.latencyP50 ?? "-"} ms, p95 ${k.latencyP95 ?? "-"} ms\n`);
+      process.stdout.write(`By outcome: ${k.byOutcome.map(([c, n]) => `${c} ${n}`).join(", ")}\nBy tool: ${k.byTool.map(([c, n]) => `${c} ${n}`).join(", ")}\n`);
+    });
+  program.command("bounty").description("Bounties (contract only for now)").command("validate").argument("<file>")
+    .action((f: string) => { const ok = compileContract("bounty.schema.json")(JSON.parse(readFileSync(f, "utf8"))); process.stdout.write(ok ? "\u2713 Valid bounty document.\n" : "\u2717 Not a valid bounty document.\n"); exitCode = ok ? 0 : 1; });
+
   program.command("demo")
     .description("See permissions, autonomy, risk and receipts in 60 seconds: one shopping agent under three mandates")
     .option("--out <dir>", "folder for the demo's mandates, receipts and passports", "saktum-demo")
-    .option("--story <name>", "grocery, travel, finance, autonomy, or all (grocery, travel and finance)", "all")
+    .option("--story <name>", "grocery, travel, finance, marketplace, autonomy, or all (grocery, travel, finance and marketplace)", "all")
     .action(async (o: { out: string; story: string }) => {
       const { runDemo } = await import("./demo.js");
       await runDemo(o.out, (l) => process.stdout.write(l + "\n"), o.story);

@@ -7,7 +7,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { loadOrCreateKey } from "@saktum/sign";
 import { connect } from "@saktum/transports";
-import { checkOperator, cosignMandate, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, describeMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type IntentMandate, type Mandate } from "@saktum/testkit-core";
+import { acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, checkOperator, cosignMandate, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, describeMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type IntentMandate, type Mandate } from "@saktum/testkit-core";
 import { renderAgentPassport } from "@saktum/report";
 
 const PRODUCTS = [{ id: "oat-milk", name: "Oat milk 1 L", price: 4.49 }, { id: "bread", name: "Sourdough bread", price: 5.99 }, { id: "coffee", name: "Coffee beans 1 kg", price: 21.99 }];
@@ -176,15 +176,88 @@ async function runStory(dir: string, st: Story, owner: ReturnType<typeof loadOrC
   return html;
 }
 
+async function runMarketplace(dir: string, log: (s: string) => void): Promise<string> {
+  const self = [...process.execArgv, process.argv[1]!];
+  const k = (n: string) => loadOrCreateKey(join(dir, `market-${n}-key.json`));
+  const acme = k("acme"), priya = k("priya"), agent = k("agent"), grocer = k("grocer"), travel = k("travel");
+  const exp = new Date(Date.now() + 180 * 864e5).toISOString().slice(0, 10);
+  const w = (f: string, x: unknown) => { writeFileSync(join(dir, f), JSON.stringify(x, null, 2)); return join(dir, f); };
+  log(`\u2500\u2500 Marketplace: "Acme's shopping agent finds a store, agrees terms, and pays per call in prepaid tokens"`);
+  const root = organisationRoot({ name: "Acme Corp", domain: "acme.example", expires: exp }, acme);
+  const priyaCred = issueCredential(root, acme, { type: "member", id: priya.kid, name: "Priya", role: "procurement lead", expires: exp });
+  const agentCred = issueCredential(priyaCred, priya, { type: "agent", id: agent.kid, name: "Acme shopping agent", expires: exp });
+  const credFile = w("market-agent-credential.json", agentCred);
+  const vchain = verifyChain(agentCred);
+  log(vchain.valid ? `   \u2713 identity chain: ${vchain.path.join(" \u2192 ")}; accountable organisation ${vchain.organisation}` : `   \u2717 identity chain broken: ${vchain.reason}`);
+  const gm = buildManifest({ publisher: { name: "Demo Grocer", domain: "grocer.example" }, server: { name: "demo-grocer", version: "1.0.0" }, tools: GROCERY_TOOLS as never, rates: { perCall: 1, perTool: { add_to_cart: 2, pay_for_order: 5 } } }, grocer);
+  const tm = buildManifest({ publisher: { name: "Demo Travel", domain: "travel.example" }, server: { name: "demo-travel", version: "1.0.0" }, tools: TRAVEL_TOOLS as never, rates: { perCall: 2 } }, travel);
+  w("market-catalog.json", [gm, tm]);
+  log(`   \u2713 Demo Grocer and Demo Travel publish signed manifests to the catalogue (rates in tokens per call)`);
+  const hits = searchCatalogue([gm, tm], "buy weekly groceries for the office");
+  log(`   \u2713 the agent searches "buy weekly groceries for the office": ${hits[0]!.manifest.publisher.name} (intents ${hits[0]!.matched.join(", ")})`);
+  const ag = acceptAgreement(draftAgreement({ manifest: gm, invoker: { id: acme.kid, name: "Acme Corp" }, purpose: "Weekly office groceries", tools: gm.capabilities.map((c) => c.tool), tokensPerMonth: 500,
+    specificTerms: ["Deliveries to the Acme office only", "Substitutions within 10% of the price"], validUntil: exp }, grocer), acme);
+  const agFile = w("market-agreement.json", ag);
+  log(`   \u2713 agreement ${ag.id}: ${ag.terms.length} default terms + ${ag.specificTerms!.length} specific, signed by Demo Grocer and Acme Corp (${verifyAgreement(ag).valid ? "verified" : "NOT valid"})`);
+  const wf = join(dir, "market-wallet.json");
+  topUp(wf, acme.kid, 12);
+  log(`   \u2713 Acme tops up 12 prepaid tokens (bought outside Saktum; no money is handled here)`);
+  const m = cosignMandate(createMandate({ agentId: agent.kid, agentName: "Acme shopping agent", ownerName: "Priya", purpose: "Weekly office groceries", tools: gm.capabilities.map((c) => c.tool), destructive: false, expires: exp, autonomy: "act" } as never, priya), acme, "Acme Corp");
+  const mf = w("market-mandate.json", m), rf = join(dir, "market-receipts.jsonl"), revf = join(dir, "market-revoked-credentials.json");
+  writeFileSync(revf, "[]");
+  const open = () => connect({ kind: "stdio", command: process.execPath, args: [...self, "proxy", "--mandate", mf, "--agent-key", join(dir, "market-agent-key.json"), "--enforce", "--receipts", rf,
+    "--credential", credFile, "--revoked-credentials", revf, "--agreement", agFile, "--wallet", wf, "--", process.execPath, ...self, "demo-server", "--story", "grocery"] });
+  const steps: Step[] = [
+    { tool: "search_products", args: { query: "milk" }, say: "searches the catalogue" },
+    { tool: "add_to_cart", args: { product: "Oat milk", brand: "Usual Farms", category: "dairy", quantity: 2, price: 4.49 }, say: "adds oat milk" },
+    { tool: "add_to_cart", args: { product: "Coffee beans 1 kg", brand: "Usual Farms", category: "coffee", quantity: 1, price: 21.99 }, say: "adds coffee" },
+    { tool: "pay_for_order", args: { amount: 30.97, currency: "CAD", merchant: "Demo Grocer", idempotency_key: "m-1" }, say: "pays $30.97" },
+    { tool: "add_to_cart", args: { product: "Bread", brand: "Usual Farms", category: "bakery", quantity: 1, price: 5.99 }, say: "starts next week's order" },
+    { tool: "search_products", args: { query: "fruit" }, say: "searches again" }];
+  const run = async (st: Step[]) => {
+    const s2 = await open();
+    try { await s2.listTools(); for (const st1 of st) {
+      const o = await s2.callTool(st1.tool, st1.args); const txt = o.kind === "result" ? (o.content as { text?: string }[]).map((c) => c.text ?? "").join(" ") : o.kind;
+      const blocked = /^Blocked by Saktum \(([^)]+)\): (.+?)\.( Ask| Tell|$)/.exec(txt); const last = parseReceiptLog(readFileSync(rf, "utf8")).pop();
+      log(blocked ? `   \u26d4 ${st1.say}: ${blocked[1]}: ${blocked[2]}` : `   \u2713 ${st1.say} \u00b7 ${last?.result.metering?.tokens ?? 0} token(s), balance ${last?.result.metering?.balance ?? "-"}`);
+    } } finally { await s2.close(); await new Promise((r) => setTimeout(r, 300)); }
+  };
+  await run(steps);
+  const entries = parseReceiptLog(readFileSync(rf, "utf8"));
+  const st = usageStatement(entries, ag, grocer) as { lines: { tool: string; calls: number; tokens: number }[]; totalTokens: number };
+  log(`   \u2713 usage statement signed by Demo Grocer: ${st.lines.map((l) => `${l.tool} ${l.calls}\u00d7 = ${l.tokens}`).join(", ")}; total ${st.totalTokens} tokens`);
+  log(`   \u2713 wallet (double-entry): Acme ${walletBalance(wf, acme.kid)} tokens, Demo Grocer ${walletBalance(wf, grocer.kid)} tokens`);
+  writeFileSync(revf, JSON.stringify([priyaCred.id]));
+  const orphan = findOrphans([agentCred], { revoked: [priyaCred.id] })[0];
+  log(`   \u26d4 Priya leaves Acme and her credential is revoked: the agent is now an orphan (${orphan?.reason})`);
+  topUp(wf, acme.kid, 5);
+  await run([{ tool: "search_products", args: { query: "milk" }, say: "the orphaned agent tries to search" }]);
+  const all = parseReceiptLog(readFileSync(rf, "utf8")); const k2 = kpis(all);
+  log(`   KPIs: ${k2.calls} calls \u00b7 ${k2.allowed} allowed \u00b7 ${k2.blocked} blocked (${k2.byOutcome.filter(([c]) => !c.startsWith("ok")).map(([c, n]) => `${n} ${c}`).join(", ")}) \u00b7 ${k2.tokens} tokens`);
+  const html = join(dir, "marketplace-passport.html");
+  const ts = trustStatement(all, verifyReceiptLog(all).ok);
+  writeFileSync(html, renderAgentPassport(m as never, { ok: true }, { verified: verifyReceiptLog(all).ok, summary: summariseReceipts(all), timeline: all.map((e) => ({ tool: e.receipt.envelope.tool, outcome: e.receipt.outcome, status: e.result.status, repeated: false, why: [e.receipt.reason ?? "", e.result.metering ? `${e.result.metering.tokens} token(s), balance ${e.result.metering.balance}` : ""].filter(Boolean).join(" \u00b7 ") })) },
+    agentRiskTier(m), [`Weekly office groceries for Acme Corp, under agreement ${ag.id} with Demo Grocer.`, `Accountable: ${verifyChain(agentCred).path.join(" \u2192 ")}.`, "Paid per call in prepaid tokens."], { operator: "Acme Corp", track: ts.lines }));
+  log(`   ${all.length} signed receipts \u00b7 ${verifyReceiptLog(all).ok ? "verified" : "NOT verified"} \u00b7 passport: ${html}\n`);
+  return html;
+}
+
 export async function runDemo(dir: string, log: (s: string) => void, story = "all"): Promise<{ files: string[] }> {
   if (story === "autonomy") return runAutonomyDemo(dir, log);
+  if (story === "marketplace") { if (existsSync(dir)) rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true }); return { files: [await runMarketplace(dir, log)] }; }
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const owner = loadOrCreateKey(join(dir, "owner-key.json"));
   log("Saktum demo: agents acting on real instructions (rules, preferences, substitutions, upsells), every decision explained and signed.\n");
   const files: string[] = [];
   for (const st of story === "travel" ? [TRAVEL] : story === "grocery" ? [GROCERY] : story === "finance" ? [FINANCE] : [GROCERY, TRAVEL, FINANCE]) files.push(await runStory(dir, st, owner, log));
-  log("What you just saw: each agent followed its owner's instructions, not just limits. Even when tricked by a hidden\ninstruction, the mandate held; personal and confidential data went only where you allowed; a big invoice waited for your\nsigned approval of exactly that payment; and the stop button worked. Blocked steps never\nreached the store or airline, and every decision has a signed receipt with its reason. Open the passports for the\ninstructions in plain words, the track record and the reason for every step. Also try: npx saktum demo --story autonomy");
+  if (story === "all") files.push(await runMarketplace(dir, log));
+  log(["What you just saw: each agent followed its owner's instructions, not just limits. Even when tricked by a hidden",
+    "instruction, the mandate held; personal and confidential data went only where you allowed; a big invoice waited for your",
+    "signed approval of exactly that payment; and the stop button worked. In the marketplace, an agent traceable to a person",
+    "and its organisation found a store by intent, both sides signed an agreement, every call was metered in prepaid tokens",
+    "until credit ran out, and when its sponsor left, the orphaned agent was refused. Every decision has a signed receipt.",
+    "Open the passports in the demo folder. Also try: npx saktum demo --story autonomy"].join("\n"));
   return { files };
 }
 
