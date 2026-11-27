@@ -11,6 +11,17 @@ npx saktum check https://your-server.example/mcp     # a remote server (sign-in 
 
 Runs on your machine. Nothing is uploaded. Your own environment variables are never passed to the server.
 
+## Trust you can verify (v0.12)
+
+Saktum holds itself to the standard it asks of others. Revocations are signed and stick (receipt chain, optional remote
+list); wallets and receipts are chained and signed, with checkpoints that detect deletion; approvals are single use,
+per request and can require a **passkey**; proxies **pin tools** against rug pulls and **fail closed**; argument
+digests are keyed; organisations **verify their domain**; keys can live in the OS keychain or any key service through an
+external signer; the ledger records key rotations and revocations, with checkpoints and witnesses; canonical JSON is
+RFC 8785-compatible. Releases are Sigstore-signed (`saktum self-verify`), actions are pinned, and CodeQL, Dependabot and
+the OpenSSF Scorecard run on the repository. See [threat model v2](docs/THREAT-MODEL.md),
+[security architecture](docs/SECURITY-ARCHITECTURE.md) and the [hardening guide](docs/HARDENING.md).
+
 ## Enterprise pilot-ready (v0.10)
 
 - **Remote MCP servers:** `saktum proxy --mandate m.json --enforce -- saktum bridge https://host/mcp` governs a remote
@@ -234,7 +245,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.10.0
+- uses: soodhere/saktum-check@v0.12.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

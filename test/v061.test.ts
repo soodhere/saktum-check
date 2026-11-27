@@ -9,7 +9,7 @@ import { generateSigningKey } from "@saktum/sign";
 import { fixture, root } from "./helpers.js";
 
 const packs = loadPackDir(root + "packs");
-const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: 150_000 });
+const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: process.platform === "win32" ? 450_000 : 150_000 });
 const t = (name: string, description: string, annotations: Record<string, unknown> = {}) => ({ name, description, inputSchema: { type: "object" }, annotations });
 
 describe("risk tiers", () => {

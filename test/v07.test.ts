@@ -8,7 +8,7 @@ import { approvalRequestId, approveAction, consumeApproval, actionClass, binding
 import { generateSigningKey } from "@saktum/sign";
 import { root } from "./helpers.js";
 
-const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: 200_000 });
+const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: process.platform === "win32" ? 600_000 : 200_000 });
 const owner = generateSigningKey(), agent = generateSigningKey();
 const cart = { name: "add_to_cart", inputSchema: { type: "object", properties: { product: {}, brand: {}, category: {}, quantity: {}, price: {}, substitute_for: {}, reference_price: {}, upgrade: {}, sponsored: {} } } };
 const grocery = createMandate({ agentId: agent.kid, agentName: "Shopper", destructive: false, expires: "2099-01-01", purpose: "Weekly groceries",
@@ -62,7 +62,7 @@ describe("saktum demo (grocery and travel)", () => {
     expect(out).not.toMatch(/NOT verified/);
     for (const p of ["grocery", "travel"]) expect(existsSync(join(dir, "d", `${p}-passport.html`))).toBe(true);
     expect(readFileSync(join(dir, "d", "grocery-passport.html"), "utf8")).toMatch(/Its instructions, in plain words[\s\S]*Why, step by step/);
-  }, 200_000);
+  }, process.platform === "win32" ? 600_000 : 200_000);
 });
 
 describe("closing the honest gaps: data, parties, revocation, track record", () => {
@@ -90,10 +90,10 @@ describe("closing the honest gaps: data, parties, revocation, track record", () 
   });
   it("tells the whole story in the demo: tricked but held, data kept, stop works, countersigned, track record", () => {
     const dir = mkdtempSync(join(tmpdir(), "d9-"));
-    const out = cli(["demo", "--out", join(dir, "d")]).stdout;
+    const out = cli(["demo", "--story", "grocery", "--out", join(dir, "d")]).stdout + cli(["demo", "--story", "travel", "--out", join(dir, "t")]).stdout;
     for (const s of ["countersigned by the operator, Demo Grocer", "adds 10 gift cards: rule-violated", "QuickCash is not an allowed counterparty", "passport may not be shared with Hotel Partner", "it tries to search again: revoked", "Track record:", "all signed and verified"]) expect(out).toContain(s);
     expect(readFileSync(join(dir, "d", "grocery-passport.html"), "utf8")).toMatch(/Track record[\s\S]*countersigned by the operator Demo Grocer/);
-  }, 240_000);
+  }, process.platform === "win32" ? 720_000 : 240_000);
 });
 
 describe("signed approvals and enterprise data classes", () => {
@@ -123,5 +123,5 @@ describe("signed approvals and enterprise data classes", () => {
     const dir = mkdtempSync(join(tmpdir(), "fin-"));
     const out = cli(["demo", "--story", "finance", "--out", join(dir, "d")]).stdout;
     for (const s of ["confidential data may not be shared with Partner Agency", "sends confidential results to the external auditor", "retries the same $12,000 invoice: approved by you, once", "(1 after your signed approval)"]) expect(out).toContain(s);
-  }, 200_000);
+  }, process.platform === "win32" ? 600_000 : 200_000);
 });

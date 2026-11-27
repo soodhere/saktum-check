@@ -119,18 +119,39 @@ export function verifyAgreement(a: Agreement, today = nowIso().slice(0, 10)): { 
 export const tokensFor = (a: Agreement, tool: string) => a.rates.perTool?.[tool] ?? a.rates.perCall;
 
 // ---------- the wallet: prepaid tokens, double-entry ----------
-export interface WalletEntry { at: string; from: string; to: string; tokens: number; ref: string }
+export interface WalletEntry { at: string; from: string; to: string; tokens: number; ref: string; prev?: string; hash?: string; signature?: { kid: string } }
 const readWallet = (path: string): { entries: WalletEntry[] } => { try { return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : { entries: [] }; } catch { return { entries: [] }; } };
 const writeWallet = (path: string, w: { entries: WalletEntry[] }) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(w, null, 2) + "\n"); };
+/** S2: each wallet entry is chained to the previous one and, when a key is given, signed. */
+function sealEntry(w: { entries: WalletEntry[] }, e: WalletEntry, key?: SigningKey): WalletEntry {
+  const prev = w.entries[w.entries.length - 1]?.hash ?? "sha256:genesis";
+  const body = { at: e.at, from: e.from, to: e.to, tokens: e.tokens, ref: e.ref, prev };
+  const hash = argumentsHash(body);
+  return key ? (signDocument({ ...body, hash }, key) as WalletEntry) : { ...body, hash };
+}
+export function verifyWallet(path: string): { ok: boolean; errors: string[] } {
+  const errors: string[] = []; let prev = "sha256:genesis";
+  readWallet(path).entries.forEach((e, i) => {
+    if (!e.hash) return;
+    const { signature: _s, hash, ...body } = e;
+    if (body.prev !== prev) errors.push(`entry ${i + 1}: chain broken`);
+    if (argumentsHash({ at: body.at, from: body.from, to: body.to, tokens: body.tokens, ref: body.ref, prev: body.prev }) !== hash) errors.push(`entry ${i + 1}: changed after it was written`);
+    if (e.signature && !verifyDocument(e as never).valid) errors.push(`entry ${i + 1}: signature not valid`);
+    prev = hash;
+  });
+  return { ok: errors.length === 0, errors };
+}
 export const PREPAID = "saktum:prepaid";
 export function walletBalance(path: string, account: string): number { return readWallet(path).entries.reduce((b, e) => b + (e.to === account ? e.tokens : 0) - (e.from === account ? e.tokens : 0), 0); }
 /** Add prepaid tokens to an account (bought outside Saktum; no money is handled here). */
-export function topUp(path: string, account: string, tokens: number, ref = "top-up") { const w = readWallet(path); w.entries.push({ at: nowIso(), from: PREPAID, to: account, tokens, ref }); writeWallet(path, w); return walletBalance(path, account); }
+export function topUp(path: string, account: string, tokens: number, ref = "top-up", key?: SigningKey) { const w = readWallet(path); w.entries.push(sealEntry(w, { at: nowIso(), from: PREPAID, to: account, tokens, ref }, key)); writeWallet(path, w); return walletBalance(path, account); }
 /** Move tokens for one metered call: debit the invoker, credit the provider, or refuse if credit is insufficient. */
-export function chargeCall(path: string, a: Agreement, tool: string, ref: string): { ok: true; tokens: number; balance: number } | { ok: false; tokens: number; balance: number } {
-  const cost = tokensFor(a, tool), bal = walletBalance(path, a.invoker.id);
+export function chargeCall(path: string, a: Agreement, tool: string, ref: string, key?: SigningKey): { ok: true; tokens: number; balance: number } | { ok: false; tokens: number; balance: number } {
+  const cost = tokensFor(a, tool);
+  if (!verifyWallet(path).ok) return { ok: false, tokens: cost, balance: 0 };
+  const bal = walletBalance(path, a.invoker.id);
   if (bal < cost) return { ok: false, tokens: cost, balance: bal };
-  const w = readWallet(path); w.entries.push({ at: nowIso(), from: a.invoker.id, to: a.provider.id, tokens: cost, ref }); writeWallet(path, w);
+  const w = readWallet(path); w.entries.push(sealEntry(w, { at: nowIso(), from: a.invoker.id, to: a.provider.id, tokens: cost, ref }, key)); writeWallet(path, w);
   return { ok: true, tokens: cost, balance: bal - cost };
 }
 

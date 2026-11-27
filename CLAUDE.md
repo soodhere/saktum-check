@@ -205,3 +205,13 @@ approvals by link (recordPending/listPending; proxy --approval-webhook and --app
 one-time token on localhost), receipts view (combined verified HTML), --bindings override, agents scan and assess
 --agents-inventory, security pack (SECURITY.md, THREAT-MODEL, DATA-FLOW, VENDOR-QUESTIONNAIRE), pilot kit
 (scripts/pilot, templates, PILOT.md rewritten: free design-partner pilots first). 189 tests.
+
+## v0.12.0 (1 Dec 2026): trust you can verify (closes S1-S15 of the trust and security review)
+trust.ts (keyedDigest, signRevocation/validRevocation, revokedInChain, approvalUsedInChain, checkpoints and witnesses,
+verifyDomain), webauthn.ts (passkey registration and assertion, ES256 and EdDSA), ledger statements (key-rotation with
+proof of possession, revocation by the target's signer; ledgerStatus), external signer (--key exec:), signed chained
+wallet (verifyWallet; chargeCall refuses an invalid wallet), proxy: remote and chain revocation, chain single use,
+keyed digests, fail-closed, tool pinning, checkpoints, per-request approval tokens; approvals serve with per-request
+links and passkeys; bridge --header-env; org verify-domain; ledger rotate|revoke-entry|checkpoint|witness|check;
+receipts checkpoint; wallet verify; self-verify. RFC 8785 vectors. Actions pinned by commit, CodeQL, Scorecard,
+Dependabot, Sigstore-signed bundle, bots pinned to an exact version. Threat model v2, security architecture, hardening.

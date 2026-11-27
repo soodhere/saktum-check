@@ -30,3 +30,5 @@ export * from "./vocab.js";
 export * from "./market.js";
 export * from "./crosswalk.js";
 export * from "./agents.js";
+export * from "./trust.js";
+export * from "./webauthn.js";

@@ -8,7 +8,7 @@ import { acceptAgreement, buildManifest, chargeCall, compileContract, draftAgree
 import { generateSigningKey } from "@saktum/sign";
 import { root } from "./helpers.js";
 
-const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: 240_000 });
+const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: process.platform === "win32" ? 720_000 : 240_000 });
 const exp = "2099-01-01";
 const org = generateSigningKey(), person = generateSigningKey(), agent = generateSigningKey(), pub = generateSigningKey();
 const rootCred = organisationRoot({ name: "Acme", domain: "acme.example", expires: exp }, org);
@@ -65,7 +65,7 @@ describe("saktum demo --story marketplace", () => {
   it("runs the October vision end to end", () => {
     const out = cli(["demo", "--story", "marketplace", "--out", join(mkdtempSync(join(tmpdir(), "mk-")), "d")]).stdout;
     for (const s of ["Acme Corp \u2192 Priya (procurement lead) \u2192 Acme shopping agent", "signed by Demo Grocer and Acme Corp (verified)", "balance 0", "insufficient-credit", "total 12 tokens", "Acme 0 tokens, Demo Grocer 12 tokens", "identity-chain", "verified \u00b7 passport"]) expect(out).toContain(s);
-  }, 240_000);
+  }, process.platform === "win32" ? 720_000 : 240_000);
 });
 
 describe("agent maturity (A1-A5)", () => {

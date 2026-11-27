@@ -13,7 +13,7 @@ import { root, startHttpFixture } from "./helpers.js";
 
 const main = root + "packages/cli/src/main.ts";
 const self = ["--import", "tsx", main];
-const cli = (args: string[]) => spawnSync(process.execPath, [...self, ...args], { cwd: root, encoding: "utf8", timeout: 120_000 });
+const cli = (args: string[]) => spawnSync(process.execPath, [...self, ...args], { cwd: root, encoding: "utf8", timeout: process.platform === "win32" ? 360_000 : 120_000 });
 const text = (o: { kind: string; content?: unknown }) => (o.kind === "result" ? (o.content as { text?: string }[]).map((c) => c.text ?? "").join(" ") : o.kind);
 
 function setup(m: Record<string, unknown>) {

@@ -56,7 +56,7 @@ export function publicKeyFromDidKey(did: string): KeyObject {
   return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(bytes.slice(2)).toString("base64url") }, format: "jwk" });
 }
 
-export interface SigningKey { privateKey: KeyObject; publicKey: KeyObject; kid: string }
+export interface SigningKey { privateKey: KeyObject; publicKey: KeyObject; kid: string; signer?: (data: Buffer) => Buffer }
 
 export function generateSigningKey(): SigningKey {
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
@@ -97,6 +97,14 @@ function keychain(name: string): SigningKey {
 export function loadOrCreateKey(path = defaultKeyPath()): SigningKey {
   if (path.startsWith("env:")) { const v = process.env[path.slice(4)]; if (!v) throw new Error(`Environment variable ${path.slice(4)} is not set.`); return keyFromJwk(v); }
   if (path.startsWith("keychain:")) return keychain(path.slice(9));
+  if (path.startsWith("exec:")) {
+    // S13: an external signer (cloud key service, hardware module): "<program> public" prints the public JWK;
+    // "<program> sign" reads base64 data on stdin and prints a base64 Ed25519 signature. The private key never enters Saktum.
+    const prog = path.slice(5);
+    const publicKey = createPublicKey({ key: JSON.parse(execFileSync(prog, ["public"], { encoding: "utf8" })), format: "jwk" });
+    const signer = (data: Buffer) => { const sig = Buffer.from(execFileSync(prog, ["sign"], { encoding: "utf8", input: data.toString("base64") }).trim(), "base64"); if (!verify(null, data, publicKey, sig)) throw new Error("The external signer returned an invalid signature."); return sig; };
+    return { privateKey: publicKey, publicKey, kid: didKeyFromPublicKey(publicKey), signer };
+  }
   if (existsSync(path)) {
     const jwk = JSON.parse(readFileSync(path, "utf8"));
     const privateKey = createPrivateKey({ key: jwk, format: "jwk" });
@@ -117,7 +125,7 @@ export function signDocument<T extends object>(doc: T, key: SigningKey): Omit<T,
   const { signature: _ignored, ...body } = doc as T & { signature?: unknown };
   const header = b64u(Buffer.from(JSON.stringify({ alg: "EdDSA", kid: key.kid })));
   const payload = b64u(Buffer.from(canonicalize(body)));
-  const sig = sign(null, Buffer.from(`${header}.${payload}`), key.privateKey);
+  const sig = key.signer ? key.signer(Buffer.from(`${header}.${payload}`)) : sign(null, Buffer.from(`${header}.${payload}`), key.privateKey);
   return { ...(body as Omit<T, "signature">), signature: { alg: "EdDSA", kid: key.kid, jws: `${header}..${b64u(sig)}` } };
 }
 

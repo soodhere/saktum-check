@@ -37,7 +37,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with: { node-version: 22 }
     - name: Run Saktum Check
       shell: bash
@@ -56,9 +56,9 @@ runs:
         { echo '## Saktum Check'; echo; echo '```'; head -c 60000 saktum-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
         cat saktum-report.txt
         exit $CODE
-    - uses: github/codeql-action/upload-sarif@v3
+    - uses: github/codeql-action/upload-sarif@74c1aea9df7c0f02e9b7bfe4a8935abf2e5e3aa6 # v3
       if: always() && inputs.sarif == 'true' && hashFiles('saktum.sarif') != ''
       with: { sarif_file: saktum.sarif, category: saktum-check }
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       if: always()
       with: { name: saktum-report, path: "saktum-report.json\nsaktum-report.html\nsaktum-badge.svg\nsaktum-report.txt", if-no-files-found: ignore }

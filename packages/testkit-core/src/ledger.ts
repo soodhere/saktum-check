@@ -11,6 +11,41 @@ export interface LedgerEntry {
   ledgerFormat: "0.1"; seq: number; recordedAt: string; source: { issue?: number; via?: string };
   subject: { server: string; version?: string; toolsFingerprint?: string };
   signer: string; attestation: SignedAttestation; prevHash: string; entryHash: string;
+  /** v0.12: a key rotation or revocation statement instead of an attestation (attestation is then absent). */
+  statement?: Statement;
+}
+export type Statement = { statementFormat: "0.1"; type: "key-rotation" | "revocation"; oldKey?: string; newKey?: string; newKeyProof?: unknown; target?: string; reason?: string; at: string; signature: Signature };
+/** v0.12: check a key-rotation statement (signed by the old key, with proof of possession of the new key) or a revocation (signed by the key being revoked or the attestation's signer). */
+export function checkStatement(s: unknown): { ok: true; st: Statement; signer: string } | { ok: false; reason: string } {
+  const st = s as Statement;
+  if (!st || st.statementFormat !== "0.1" || !["key-rotation", "revocation"].includes(st.type)) return { ok: false, reason: "not a Saktum statement" };
+  if (JSON.stringify(st).length > MAX_ATTESTATION_BYTES) return { ok: false, reason: "statement too large" };
+  const v = verifyDocument(st);
+  if (!v.valid) return { ok: false, reason: `signature not valid (${v.reason})` };
+  if (st.type === "key-rotation") {
+    if (v.kid !== st.oldKey || !st.newKey) return { ok: false, reason: "a rotation must be signed by the old key and name the new key" };
+    const pv = verifyDocument(st.newKeyProof as never);
+    if (!pv.valid || pv.kid !== st.newKey || (st.newKeyProof as { rotates?: string }).rotates !== st.oldKey) return { ok: false, reason: "missing proof of possession of the new key" };
+  } else if (!st.target) return { ok: false, reason: "a revocation must name its target" };
+  return { ok: true, st, signer: v.kid! };
+}
+export function appendStatement(ledgerText: string, statement: unknown, source: LedgerEntry["source"], now = new Date()): { text: string; entry: LedgerEntry } {
+  const c = checkStatement(statement);
+  if (!c.ok) throw new Error(`Refused: ${c.reason}`);
+  const entries = parseLedger(ledgerText);
+  const check = verifyLedger(entries);
+  if (!check.ok) throw new Error(`Refused: the existing ledger does not verify (${check.errors[0]})`);
+  if (c.st.type === "revocation" && !entries.some((e) => e.signer === c.signer && (e.attestation?.resultDigest === c.st.target || e.signer === c.st.target)) && c.st.target !== c.signer) throw new Error("Refused: a revocation must come from the key that signed the target");
+  const prev = entries[entries.length - 1];
+  const base = { ledgerFormat: "0.1" as const, seq: (prev?.seq ?? 0) + 1, recordedAt: now.toISOString(), source, subject: { server: `${c.st.type}:${c.signer.slice(0, 32)}` }, signer: c.signer, statement: c.st, prevHash: prev?.entryHash ?? GENESIS };
+  const entry = { ...base, entryHash: hashOf(base as never) } as unknown as LedgerEntry;
+  return { text: `${ledgerText.replace(/\n*$/, ledgerText.trim() ? "\n" : "")}${JSON.stringify(entry)}\n`, entry };
+}
+/** Keys rotated away from or revoked, and attestations revoked, according to the ledger. */
+export function ledgerStatus(entries: LedgerEntry[]) {
+  const rotated = new Map<string, string>(), revoked = new Set<string>();
+  for (const e of entries) { if (e.statement?.type === "key-rotation") rotated.set(e.statement.oldKey!, e.statement.newKey!); if (e.statement?.type === "revocation") revoked.add(e.statement.target!); }
+  return { rotated, revoked };
 }
 export const GENESIS = "sha256:genesis";
 export const DEFAULT_LEDGER_URL = "https://raw.githubusercontent.com/soodhere/saktum-index/main/docs/ledger/ledger.jsonl";
@@ -49,7 +84,7 @@ export function appendToLedger(ledgerText: string, attestation: unknown, source:
   const entries = parseLedger(ledgerText);
   const check = verifyLedger(entries);
   if (!check.ok) throw new Error(`Refused: the existing ledger does not verify (${check.errors[0]})`);
-  if (entries.some((e) => e.signer === c.signer && e.attestation.resultDigest === c.att.resultDigest)) throw new Error("Refused: this attestation is already in the ledger");
+  if (entries.some((e) => e.signer === c.signer && e.attestation?.resultDigest === c.att.resultDigest)) throw new Error("Refused: this attestation is already in the ledger");
   const prev = entries[entries.length - 1];
   const base: Omit<LedgerEntry, "entryHash"> = { ledgerFormat: "0.1", seq: (prev?.seq ?? 0) + 1, recordedAt: now.toISOString(), source,
     subject: { server: sanitizeText(c.att.subject.server, 200), version: c.att.subject.version, toolsFingerprint: c.att.subject.toolsFingerprint },
@@ -67,15 +102,16 @@ export function verifyLedger(entries: LedgerEntry[]): { ok: boolean; count: numb
     if (e.prevHash !== prev) errors.push(`entry ${e.seq}: chain broken (previous hash does not match)`);
     const { entryHash, ...base } = e;
     if (hashOf(base) !== entryHash) errors.push(`entry ${e.seq}: contents changed after it was recorded`);
-    const c = checkAttestation(e.attestation);
+    const c = e.statement ? checkStatement(e.statement) : checkAttestation(e.attestation);
     if (!c.ok) errors.push(`entry ${e.seq}: ${c.reason}`);
-    else if (c.signer !== e.signer) errors.push(`entry ${e.seq}: signer does not match the attestation`);
+    else if (c.signer !== e.signer) errors.push(`entry ${e.seq}: signer does not match`);
     prev = entryHash;
   });
   return { ok: errors.length === 0, count: entries.length, errors };
 }
 
 export function findInLedger(entries: LedgerEntry[], query: string): LedgerEntry[] {
+  entries = entries.filter((e) => e.attestation);
   const q = query.toLowerCase();
   return entries.filter((e) => e.subject.server.toLowerCase().includes(q) || e.subject.toolsFingerprint === query);
 }
@@ -89,6 +125,7 @@ export function allowlistFromLedger(entries: LedgerEntry[], c: { minTrust: strin
   for (const e of entries) latest.set(`${e.subject.server}|${e.subject.toolsFingerprint}`, e);
   const allowed: Record<string, unknown>[] = [], excluded: { server: string; reason: string }[] = [];
   for (const e of latest.values()) {
+    if (!e.attestation) continue;
     const cl = e.attestation.claims, why: string[] = [];
     if (c.trustedSigners && !c.trustedSigners.has(e.signer)) why.push("signer is not on your trusted list");
     if (!atLeast(cl.trustGrade, c.minTrust)) why.push(`trust ${cl.trustGrade ?? "not graded"} is below ${c.minTrust}`);

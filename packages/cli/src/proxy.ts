@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { canonicalize, sha256Tag } from "@saktum/sign";
 // `saktum proxy`: the gateway in miniature, for local (stdio) MCP servers. Put it between an agent and a server; it
 // forwards every message unchanged, decides each tool call against the agent's mandate (observe by default, block with
 // --enforce), and writes a signed, hash-chained receipt for every call. Arguments are stored only as a digest.
@@ -7,9 +9,9 @@ import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 import { randomUUID } from "node:crypto";
 import type { SigningKey } from "@saktum/sign";
-import { recordPending, DEFAULT_APPROVALS, chargeCall, verifyAgreement, verifyChain, type Agreement, type Credential, approvalRequestId, argumentsHash, capabilityProfile, chainEntry, consumeApproval, decideCall, decideIntent, hasIntent, parseReceiptLog, revocationOf, signReceipt, type Mandate, type ReceiptLogEntry, type ToolAnnotations } from "@saktum/testkit-core";
+import { approvalUsedInChain, keyedDigest, makeCheckpoint, revokedInChain, validRevocation, recordPending, DEFAULT_APPROVALS, chargeCall, verifyAgreement, verifyChain, type Agreement, type Credential, approvalRequestId, argumentsHash, capabilityProfile, chainEntry, consumeApproval, decideCall, decideIntent, hasIntent, parseReceiptLog, revocationOf, signReceipt, type Mandate, type ReceiptLogEntry, type ToolAnnotations } from "@saktum/testkit-core";
 
-export interface ProxyOptions { approvalWebhook?: string; approvalUrl?: string; bindingsOverride?: Record<string, { action?: string; bindings?: Record<string, string> }>; credential?: Credential; revokedCredentials?: string[]; agreement?: Agreement; walletPath?: string; approvalsPath?: string; revocationsPath?: string; command: string; args: string[]; receiptsPath: string; agentKey: SigningKey; mandate?: Mandate; enforce: boolean; log?: (s: string) => void }
+export interface ProxyOptions { revocationsUrl?: string; digestKey?: string; pin?: string; checkpointEvery?: number; checkpointFile?: string; approvalSecret?: string; approvalWebhook?: string; approvalUrl?: string; bindingsOverride?: Record<string, { action?: string; bindings?: Record<string, string> }>; credential?: Credential; revokedCredentials?: string[]; agreement?: Agreement; walletPath?: string; approvalsPath?: string; revocationsPath?: string; command: string; args: string[]; receiptsPath: string; agentKey: SigningKey; mandate?: Mandate; enforce: boolean; log?: (s: string) => void }
 
 export async function runProxy(o: ProxyOptions): Promise<number> {
   mkdirSync(dirname(o.receiptsPath), { recursive: true });
@@ -24,6 +26,10 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
   const bare = !/[\\/]/.test(o.command);
   const child = spawn(o.command, o.args, { stdio: ["pipe", "pipe", "inherit"], shell: process.platform === "win32" && (bare || /\.(cmd|bat)$/i.test(o.command)) });
   let service = o.command.split(/[\\/]/).pop() ?? o.command, version: string | undefined;
+  let remoteRevoked = false, toolsChanged = false;
+  const pollRevocations = async () => { if (!o.revocationsUrl || !o.mandate) return; try { const r = await fetch(o.revocationsUrl); if (r.ok) { const j = (await r.json()) as unknown; const list = Array.isArray(j) ? j : ((j as { revoked?: unknown[] }).revoked ?? []); if (list.some((e) => validRevocation(e, o.mandate!))) remoteRevoked = true; } } catch { /* keep last state */ } };
+  await pollRevocations(); if (o.revocationsUrl) setInterval(pollRevocations, 5 * 60_000).unref();
+  const digest = (args: unknown) => (o.digestKey ? keyedDigest(args, o.digestKey) : argumentsHash(args));
   const annotations = new Map<string, ToolAnnotations>();
   const toolDefs = new Map<string, { name: string; description?: string; inputSchema?: unknown; annotations?: ToolAnnotations }>();
   const pendingKinds = new Map<string, "initialize" | "tools/list">();
@@ -42,6 +48,7 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
     const entry = chainEntry(last, receipt, result);
     appendFileSync(o.receiptsPath, JSON.stringify(entry) + "\n");
     last = entry; history.push(entry);
+    if (o.checkpointEvery && o.checkpointFile && entry.seq % o.checkpointEvery === 0) { try { appendFileSync(o.checkpointFile, JSON.stringify(makeCheckpoint(history, o.agentKey)) + "\n"); } catch { /* best effort */ } }
   };
 
   // Agent -> server
@@ -52,15 +59,20 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
     if (msg.method === "tools/call" && msg.id !== undefined) {
       const tool = String(msg.params?.name ?? "");
       const args = (msg.params?.arguments ?? {}) as Record<string, unknown>;
-      const argsHash = argumentsHash(args);
+      const argsHash = digest(args);
       const ann = annotations.get(tool);
       const def = toolDefs.get(tool);
       const isMoney = def ? capabilityProfile([def as never]).capabilities.some((c) => c.capability === "money") : false;
       const values = Object.fromEntries([...governed].filter((k) => args[k] !== undefined && (typeof args[k] === "number" || typeof args[k] === "string")).map((k) => [k, args[k] as string | number]));
-      const rev = o.mandate ? revocationOf(o.mandate, o.revocationsPath) : undefined;
-      let d: { allow: boolean; code: string; reason: string } = rev ? { allow: false, code: "revoked", reason: `the mandate was revoked on ${rev.at.slice(0, 10)}${rev.reason ? ` (${rev.reason})` : ""}` }
-        : o.mandate ? decideCall(o.mandate, { tool, server: service, args, annotations: ann, isMoney, usage: usage() }) : { allow: true, code: "ok", reason: "no mandate: observed" };
+      let d: { allow: boolean; code: string; reason: string };
       let rationale: ReceiptLogEntry["result"]["rationale"];
+      let metering: { agreement: string; tokens: number; balance: number } | undefined;
+      try {
+      const rev = o.mandate ? revocationOf(o.mandate, o.revocationsPath) : undefined;
+      d = rev ? { allow: false, code: "revoked", reason: `the mandate was revoked on ${rev.at.slice(0, 10)}${rev.reason ? ` (${rev.reason})` : ""}` }
+        : o.mandate && (remoteRevoked || revokedInChain(history)) ? { allow: false, code: "revoked", reason: "the mandate was revoked (recorded in the ledger or in this receipt chain)" }
+        : toolsChanged ? { allow: false, code: "tools-changed", reason: "the server's tools differ from the pinned, approved fingerprint" }
+        : o.mandate ? decideCall(o.mandate, { tool, server: service, args, annotations: ann, isMoney, usage: usage() }) : { allow: true, code: "ok", reason: "no mandate: observed" };
       if (d.allow && o.mandate && hasIntent(o.mandate as never)) {
         const di = decideIntent(o.mandate as never, (def ?? { name: tool }) as never, args, { server: service });
         rationale = di.rationale;
@@ -70,13 +82,14 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
       }
       if (!d.allow && d.code === "approval-needed" && o.mandate) {
         const rid = approvalRequestId(o.mandate, tool, args);
-        const ap = consumeApproval(o.mandate, rid, o.approvalsPath);
+        const ap = approvalUsedInChain(history, rid) ? { ok: false as const } : consumeApproval(o.mandate, rid, o.approvalsPath);
         if (ap.ok) d = { allow: true, code: "ok", reason: `approved by ${ap.by} (${rid}), after: ${d.reason}` };
         else {
           d = { ...d, reason: `${d.reason} [approval request ${rid}]` };
           try { recordPending(o.approvalsPath ?? DEFAULT_APPROVALS(), { id: rid, tool, reason: d.reason, agent: o.mandate.agent.name }); } catch { /* best effort */ }
           if (o.approvalWebhook) {
-            const link = o.approvalUrl ? `${o.approvalUrl}${o.approvalUrl.includes("?") ? "&" : "?"}id=${rid}` : "";
+            const t = o.approvalSecret ? createHmac("sha256", o.approvalSecret).update(rid).digest("hex").slice(0, 32) : "";
+            const link = o.approvalUrl ? `${o.approvalUrl}${o.approvalUrl.includes("?") ? "&" : "?"}id=${rid}${t ? `&t=${t}` : ""}` : "";
             const text = `Approval needed: ${o.mandate.agent.name} wants to run ${tool}. ${d.reason.replace(/ \[approval request [^\]]+\]/, "")}. Request ${rid}. ${link ? `Approve: ${link}` : `Approve with: npx saktum agent approve ${rid} --mandate <mandate>`}`;
             fetch(o.approvalWebhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, requestId: rid, tool, agent: o.mandate.agent.name, ...(link ? { approveUrl: link } : {}) }) }).catch(() => undefined);
           }
@@ -88,18 +101,18 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
         if (!vc.valid) d = { allow: false, code: "identity-chain", reason: `the agent's accountability chain is broken: ${vc.reason}` };
         else if (o.agreement && root !== o.agreement.invoker.id) d = { allow: false, code: "identity-chain", reason: "the agent's organisation is not the party to the agreement" };
       }
-      let metering: { agreement: string; tokens: number; balance: number } | undefined;
       if (d.allow && o.agreement) {
         const va = verifyAgreement(o.agreement);
         if (!va.valid) d = { allow: false, code: "no-valid-agreement", reason: `no valid agreement with the provider: ${va.reason}` };
         else if (o.agreement.scope.tools && !o.agreement.scope.tools.includes(tool)) d = { allow: false, code: "outside-agreement", reason: `${tool} is outside the agreement ${o.agreement.id}` };
         else if (o.walletPath) {
-          const ch = chargeCall(o.walletPath, o.agreement, tool, `${o.agreement.id}:${tool}`);
+          const ch = chargeCall(o.walletPath, o.agreement, tool, `${o.agreement.id}:${tool}`, o.agentKey);
           if (!ch.ok) d = { allow: false, code: "insufficient-credit", reason: `${tool} costs ${ch.tokens} tokens; the prepaid balance is ${ch.balance}` };
           else metering = { agreement: o.agreement.id, tokens: ch.tokens, balance: ch.balance };
         } else metering = { agreement: o.agreement.id, tokens: o.agreement.rates.perTool?.[tool] ?? o.agreement.rates.perCall, balance: -1 };
       }
-      if (!d.allow && o.enforce) {
+      } catch (err) { d = { allow: false, code: "error-fail-closed", reason: `the decision could not be completed, so the call is refused (${String((err as Error).message).slice(0, 120)})` }; }
+      if (!d.allow && (o.enforce || d.code === "error-fail-closed")) {
         const hint = d.code === "revoked" ? " The agent's owner stopped it; do not retry." : d.code === "approval-needed" ? " Ask your user to approve it (saktum agent approve with the request id), then retry the same action once." : d.code === "notify-only" ? " Tell your user what you found instead." : " Ask the agent's owner to change the mandate if this action is needed.";
         process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { isError: true, content: [{ type: "text", text: `Blocked by Saktum (${d.code}): ${d.reason}.${hint}` }] } }) + "\n");
         record(tool, argsHash, "deny", d.reason, { status: "blocked", destructive: isDestructive(ann), code: d.code, values, ...(rationale ? { rationale } : {}) });
@@ -123,7 +136,9 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
     const k = key(msg.id);
     const kind = pendingKinds.get(k);
     if (kind === "initialize" && msg.result?.serverInfo?.name) { service = msg.result.serverInfo.name; version = msg.result.serverInfo.version; pendingKinds.delete(k); }
-    if (kind === "tools/list" && Array.isArray(msg.result?.tools)) { for (const t of msg.result.tools) { const ov = o.bindingsOverride?.[t.name]; const def = ov ? { ...t, _meta: { ...((t as { _meta?: Record<string, unknown> })._meta ?? {}), ...(ov.action ? { "io.saktum/action": ov.action } : {}), ...(ov.bindings ? { "io.saktum/bindings": ov.bindings } : {}) } } : t; annotations.set(t.name, t.annotations); toolDefs.set(t.name, def as never); } pendingKinds.delete(k); }
+    if (kind === "tools/list" && Array.isArray(msg.result?.tools)) { for (const t of msg.result.tools) { const ov = o.bindingsOverride?.[t.name]; const def = ov ? { ...t, _meta: { ...((t as { _meta?: Record<string, unknown> })._meta ?? {}), ...(ov.action ? { "io.saktum/action": ov.action } : {}), ...(ov.bindings ? { "io.saktum/bindings": ov.bindings } : {}) } } : t; annotations.set(t.name, t.annotations); toolDefs.set(t.name, def as never); }
+      if (o.pin) { const fp = sha256Tag(canonicalize([...msg.result.tools].sort((a: { name: string }, b: { name: string }) => String(a.name).localeCompare(String(b.name))))); toolsChanged = fp !== o.pin; if (toolsChanged) o.log?.(`tools changed: ${fp} differs from the pinned ${o.pin}`); }
+      pendingKinds.delete(k); }
     const c = calls.get(k);
     if (c) {
       calls.delete(k);

@@ -227,13 +227,18 @@ export const DEFAULT_REVOCATIONS = () => _join(_home(), ".saktum", "revocations.
 type Revocations = { revoked: { mandate: string; agent: string; at: string; reason?: string }[] };
 const readRevocations = (path: string): Revocations => { try { return _exists(path) ? (JSON.parse(_read(path, "utf8")) as Revocations) : { revoked: [] }; } catch { return { revoked: [] }; } };
 /** Stop an agent now: record the mandate as revoked; every proxy using that revocation list refuses its calls. */
-export function revokeMandate(m: Mandate, reason: string | undefined, path = DEFAULT_REVOCATIONS()) {
+export function revokeMandate(m: Mandate, reason: string | undefined, path = DEFAULT_REVOCATIONS(), key?: SigningKey) {
   const r = readRevocations(path), d = mandateDigest(m);
-  if (!r.revoked.some((x) => x.mandate === d)) r.revoked.push({ mandate: d, agent: m.agent.id, at: new Date().toISOString(), ...(reason ? { reason } : {}) });
+  const entry = { revocationFormat: "0.1", mandate: d, agent: m.agent.id, at: new Date().toISOString(), ...(reason ? { reason } : {}) };
+  if (!r.revoked.some((x) => x.mandate === d)) r.revoked.push((key ? signDocument(entry, key) : entry) as never);
   _mkdir(_dirname(path), { recursive: true }); _write(path, JSON.stringify(r, null, 2) + "\n");
   return r.revoked.find((x) => x.mandate === d)!;
 }
-export function revocationOf(m: Mandate, path = DEFAULT_REVOCATIONS()) { const d = mandateDigest(m); return readRevocations(path).revoked.find((x) => x.mandate === d); }
+export function revocationOf(m: Mandate, path = DEFAULT_REVOCATIONS()) {
+  const d = mandateDigest(m);
+  const op = (m as Mandate & { operatorCountersign?: { signature?: { kid?: string } } }).operatorCountersign?.signature?.kid;
+  return readRevocations(path).revoked.find((x) => { if (x.mandate !== d) return false; const sx = x as { signature?: unknown }; if (!sx.signature) return true; const v = verifyDocument(x as never); return v.valid && (v.kid === m.owner.id || (Boolean(op) && v.kid === op)); });
+}
 
 /** How well the agent followed its instructions, from its receipts: a statement, never a score. */
 export function trustStatement(entries: ReceiptLogEntry[], verified: boolean): { lines: string[]; facts: Record<string, number> } {

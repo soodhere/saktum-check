@@ -8,7 +8,7 @@ import { actionClass, coverageSummary, crosswalk, DISCLAIMER, FRAMEWORKS, loadPa
 import { renderAssessment, renderServerPassport } from "@saktum/report";
 import { fixture, root } from "./helpers.js";
 
-const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: 200_000 });
+const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: process.platform === "win32" ? 600_000 : 200_000 });
 
 describe("framework crosswalk", () => {
   it("covers six frameworks with honest coverage and never claims compliance", () => {
@@ -43,5 +43,5 @@ describe("saktum demo --story coding", () => {
   it("keeps a coding agent to its repository and makes production wait for a signed approval", () => {
     const out = cli(["demo", "--story", "coding", "--out", join(mkdtempSync(join(tmpdir(), "cod-")), "d")]).stdout;
     for (const s of ["only the payments-service repository (got billing-core)", "approval-needed: asks before deploy", "retries the same release: approved by you, once", "(1 after your signed approval)"]) expect(out).toContain(s);
-  }, 200_000);
+  }, process.platform === "win32" ? 600_000 : 200_000);
 });

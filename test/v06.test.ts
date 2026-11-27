@@ -9,7 +9,7 @@ import { generateSigningKey } from "@saktum/sign";
 import { fixture, root } from "./helpers.js";
 
 const packs = loadPackDir(root + "packs");
-const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: 120_000 });
+const cli = (args: string[], cwd = root) => spawnSync(process.execPath, ["--import", "tsx", root + "packages/cli/src/main.ts", ...args], { cwd, encoding: "utf8", timeout: process.platform === "win32" ? 360_000 : 120_000 });
 const goodCmd = `"${process.execPath}" --import tsx "${root}fixtures/src/good.ts"`;
 
 describe("saktum watch", () => {
