@@ -51,6 +51,11 @@ In CI, the GitHub Action takes `policy: saktum-policy.yaml` (plus `sarif: "true"
   builds your allowlist from it, accepting only signers you trust.
 - The census report and the maturity model give an external benchmark.
 
+## Security pack and pilot kit
+
+For your security review: [SECURITY.md](../SECURITY.md), [threat model](THREAT-MODEL.md), [data flow](DATA-FLOW.md),
+[vendor questionnaire](VENDOR-QUESTIONNAIRE.md). To run a pilot: [PILOT.md](PILOT.md), `scripts/pilot/`, `templates/`.
+
 ## Fits your existing tools
 
 Continuous monitoring of approved servers (`saktum watch`, as a daily workflow); agent receipts as **OpenTelemetry**

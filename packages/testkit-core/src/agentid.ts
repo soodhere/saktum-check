@@ -263,8 +263,17 @@ export function approvalRequestId(m: Mandate, tool: string, args: unknown): stri
   return "apr_" + argumentsHash({ mandate: mandateDigest(m), tool, args: argumentsHash(args) }).replace(/^sha256:/, "").slice(0, 16);
 }
 export const DEFAULT_APPROVALS = () => _join(_home(), ".saktum", "approvals.json");
-type Approvals = { approvals: Record<string, unknown>[]; used: string[] };
+type Approvals = { approvals: Record<string, unknown>[]; used: string[]; pending?: { id: string; tool: string; reason: string; agent: string; at: string }[] };
 const readApprovals = (path: string): Approvals => { try { return _exists(path) ? (JSON.parse(_read(path, "utf8")) as Approvals) : { approvals: [], used: [] }; } catch { return { approvals: [], used: [] }; } };
+/** v0.10: record an action waiting for approval (for approvals by link). */
+export function recordPending(path: string, req: { id: string; tool: string; reason: string; agent: string }) {
+  const a = readApprovals(path); a.pending = (a.pending ?? []).filter((p) => p.id !== req.id); a.pending.push({ ...req, at: new Date().toISOString() });
+  _mkdir(_dirname(path), { recursive: true }); _write(path, JSON.stringify(a, null, 2) + "\n");
+}
+export function listPending(path = DEFAULT_APPROVALS()) {
+  const a = readApprovals(path);
+  return (a.pending ?? []).filter((p) => !a.used.includes(p.id) && !a.approvals.some((x) => (x as { approval?: string }).approval === p.id));
+}
 /** The principal approves exactly one pending action, for a limited time, once. */
 export function approveAction(m: Mandate, requestId: string, ownerKey: SigningKey, minutes = 60, path = DEFAULT_APPROVALS()) {
   if (ownerKey.kid !== m.owner.id) throw new Error("Only the mandate's owner can approve its actions.");

@@ -11,6 +11,20 @@ npx saktum check https://your-server.example/mcp     # a remote server (sign-in 
 
 Runs on your machine. Nothing is uploaded. Your own environment variables are never passed to the server.
 
+## Enterprise pilot-ready (v0.10)
+
+- **Remote MCP servers:** `saktum proxy --mandate m.json --enforce -- saktum bridge https://host/mcp` governs a remote
+  server exactly like a local one (headers forwarded, never logged).
+- **Protected keys:** any key option accepts `env:VAR` or `keychain:NAME` (macOS Keychain, Linux Secret Service, Windows DPAPI).
+- **Approvals by link:** `--approval-webhook` posts requests to Slack, Teams or an email relay; `saktum approvals serve`
+  lets the owner approve exactly one action in a browser with their key.
+- **Central receipts:** `saktum receipts view logs/*.jsonl` verifies and combines many agents' logs into one view.
+- **Bindings override:** `--bindings bindings.json` tells Saktum what third-party tools' arguments mean.
+- **Agent inventory:** `saktum agents scan` lists agents, owners, operators, autonomy, risk and maturity; `assess` includes it.
+- **Security pack and pilot kit:** [SECURITY.md](SECURITY.md), [threat model](docs/THREAT-MODEL.md),
+  [data flow](docs/DATA-FLOW.md), [vendor questionnaire](docs/VENDOR-QUESTIONNAIRE.md), [pilot runbook](docs/PILOT.md),
+  device-management scripts in `scripts/pilot/`, agreement and NDA templates in `templates/`.
+
 ## Evidence for governance (v0.9)
 
 Saktum is the agent-controls layer of AI governance: identity, least privilege, tool permissions, human oversight and
@@ -220,7 +234,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.9.0
+- uses: soodhere/saktum-check@v0.10.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

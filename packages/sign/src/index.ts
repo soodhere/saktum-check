@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 // Signing for Trust Check results: RFC 8785 canonical JSON, Ed25519, detached JWS (RFC 7515), did:key identifiers.
 // Uses Node's built-in crypto only (see docs/adr/0004-signing.md).
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
@@ -65,7 +66,37 @@ export function generateSigningKey(): SigningKey {
 export const defaultKeyPath = (): string => join(process.env.SAKTUM_HOME ?? join(homedir(), ".config", "saktum"), "key.jwk.json");
 
 /** Load the local signing key, creating one (readable only by the user) on first use. */
+/** Key sources (v0.10): a file path (owner-only JSON Web Key), "env:VAR" (the key's JWK JSON in an environment variable),
+ *  or "keychain:NAME" (macOS Keychain, Linux Secret Service, or Windows DPAPI under the user's profile). */
+function keyFromJwk(jwkText: string): SigningKey {
+  const privateKey = createPrivateKey({ key: JSON.parse(jwkText), format: "jwk" });
+  const publicKey = createPublicKey(privateKey);
+  return { privateKey, publicKey, kid: didKeyFromPublicKey(publicKey) };
+}
+function keychain(name: string): SigningKey {
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(name)) throw new Error("Keychain names may use letters, digits, dot, dash and underscore.");
+  const run = (cmd: string, args: string[], input?: string, env?: Record<string, string>) => execFileSync(cmd, args, { encoding: "utf8", input, env: { ...process.env, ...(env ?? {}) }, stdio: ["pipe", "pipe", "ignore"] }).trim();
+  const fresh = () => { const k = generateSigningKey(); return { k, jwk: JSON.stringify(k.privateKey.export({ format: "jwk" })) }; };
+  if (process.platform === "darwin") {
+    try { return keyFromJwk(run("security", ["find-generic-password", "-s", "saktum", "-a", name, "-w"])); }
+    catch { const { k, jwk } = fresh(); run("security", ["add-generic-password", "-s", "saktum", "-a", name, "-w", jwk, "-U"]); return k; }
+  }
+  if (process.platform === "win32") {
+    const file = join(homedir(), ".saktum", "keys", `${name}.dpapi`);
+    const ps = (script: string, env: Record<string, string>) => run("powershell", ["-NoProfile", "-NonInteractive", "-Command", "Add-Type -AssemblyName System.Security; " + script], undefined, env);
+    if (existsSync(file)) return keyFromJwk(ps("[Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String((Get-Content -Raw $env:SAKTUM_F)), $null, 'CurrentUser'))", { SAKTUM_F: file }));
+    const { k, jwk } = fresh();
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, ps("[Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($env:SAKTUM_J), $null, 'CurrentUser'))", { SAKTUM_J: jwk }), { mode: 0o600 });
+    return k;
+  }
+  try { return keyFromJwk(run("secret-tool", ["lookup", "service", "saktum", "account", name])); }
+  catch { const { k, jwk } = fresh(); run("secret-tool", ["store", "--label", `Saktum key ${name}`, "service", "saktum", "account", name], jwk); return k; }
+}
+
 export function loadOrCreateKey(path = defaultKeyPath()): SigningKey {
+  if (path.startsWith("env:")) { const v = process.env[path.slice(4)]; if (!v) throw new Error(`Environment variable ${path.slice(4)} is not set.`); return keyFromJwk(v); }
+  if (path.startsWith("keychain:")) return keychain(path.slice(9));
   if (existsSync(path)) {
     const jwk = JSON.parse(readFileSync(path, "utf8"));
     const privateKey = createPrivateKey({ key: jwk, format: "jwk" });

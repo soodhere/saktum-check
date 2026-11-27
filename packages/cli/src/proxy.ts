@@ -7,9 +7,9 @@ import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 import { randomUUID } from "node:crypto";
 import type { SigningKey } from "@saktum/sign";
-import { chargeCall, verifyAgreement, verifyChain, type Agreement, type Credential, approvalRequestId, argumentsHash, capabilityProfile, chainEntry, consumeApproval, decideCall, decideIntent, hasIntent, parseReceiptLog, revocationOf, signReceipt, type Mandate, type ReceiptLogEntry, type ToolAnnotations } from "@saktum/testkit-core";
+import { recordPending, DEFAULT_APPROVALS, chargeCall, verifyAgreement, verifyChain, type Agreement, type Credential, approvalRequestId, argumentsHash, capabilityProfile, chainEntry, consumeApproval, decideCall, decideIntent, hasIntent, parseReceiptLog, revocationOf, signReceipt, type Mandate, type ReceiptLogEntry, type ToolAnnotations } from "@saktum/testkit-core";
 
-export interface ProxyOptions { credential?: Credential; revokedCredentials?: string[]; agreement?: Agreement; walletPath?: string; approvalsPath?: string; revocationsPath?: string; command: string; args: string[]; receiptsPath: string; agentKey: SigningKey; mandate?: Mandate; enforce: boolean; log?: (s: string) => void }
+export interface ProxyOptions { approvalWebhook?: string; approvalUrl?: string; bindingsOverride?: Record<string, { action?: string; bindings?: Record<string, string> }>; credential?: Credential; revokedCredentials?: string[]; agreement?: Agreement; walletPath?: string; approvalsPath?: string; revocationsPath?: string; command: string; args: string[]; receiptsPath: string; agentKey: SigningKey; mandate?: Mandate; enforce: boolean; log?: (s: string) => void }
 
 export async function runProxy(o: ProxyOptions): Promise<number> {
   mkdirSync(dirname(o.receiptsPath), { recursive: true });
@@ -72,7 +72,15 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
         const rid = approvalRequestId(o.mandate, tool, args);
         const ap = consumeApproval(o.mandate, rid, o.approvalsPath);
         if (ap.ok) d = { allow: true, code: "ok", reason: `approved by ${ap.by} (${rid}), after: ${d.reason}` };
-        else d = { ...d, reason: `${d.reason} [approval request ${rid}]` };
+        else {
+          d = { ...d, reason: `${d.reason} [approval request ${rid}]` };
+          try { recordPending(o.approvalsPath ?? DEFAULT_APPROVALS(), { id: rid, tool, reason: d.reason, agent: o.mandate.agent.name }); } catch { /* best effort */ }
+          if (o.approvalWebhook) {
+            const link = o.approvalUrl ? `${o.approvalUrl}${o.approvalUrl.includes("?") ? "&" : "?"}id=${rid}` : "";
+            const text = `Approval needed: ${o.mandate.agent.name} wants to run ${tool}. ${d.reason.replace(/ \[approval request [^\]]+\]/, "")}. Request ${rid}. ${link ? `Approve: ${link}` : `Approve with: npx saktum agent approve ${rid} --mandate <mandate>`}`;
+            fetch(o.approvalWebhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, requestId: rid, tool, agent: o.mandate.agent.name, ...(link ? { approveUrl: link } : {}) }) }).catch(() => undefined);
+          }
+        }
       }
       if (d.allow && o.credential) {
         const vc = verifyChain(o.credential, { revoked: o.revokedCredentials });
@@ -115,7 +123,7 @@ export async function runProxy(o: ProxyOptions): Promise<number> {
     const k = key(msg.id);
     const kind = pendingKinds.get(k);
     if (kind === "initialize" && msg.result?.serverInfo?.name) { service = msg.result.serverInfo.name; version = msg.result.serverInfo.version; pendingKinds.delete(k); }
-    if (kind === "tools/list" && Array.isArray(msg.result?.tools)) { for (const t of msg.result.tools) { annotations.set(t.name, t.annotations); toolDefs.set(t.name, t as never); } pendingKinds.delete(k); }
+    if (kind === "tools/list" && Array.isArray(msg.result?.tools)) { for (const t of msg.result.tools) { const ov = o.bindingsOverride?.[t.name]; const def = ov ? { ...t, _meta: { ...((t as { _meta?: Record<string, unknown> })._meta ?? {}), ...(ov.action ? { "io.saktum/action": ov.action } : {}), ...(ov.bindings ? { "io.saktum/bindings": ov.bindings } : {}) } } : t; annotations.set(t.name, t.annotations); toolDefs.set(t.name, def as never); } pendingKinds.delete(k); }
     const c = calls.get(k);
     if (c) {
       calls.delete(k);

@@ -197,3 +197,11 @@ crosswalk.ts (EU AI Act, NIST AI RMF, ISO/IEC 42001, OWASP LLM Top 10 2025, DORA
 covered/partial/gap; DISCLAIMER: supports evidence, never compliance), `saktum evidence`, assessment evidence card,
 docs/EVIDENCE.md generated from the crosswalk. Coding-agent story (code vocabulary, deploy action class; production
 waits for a signed approval; another repository's secret blocked). Assurance shown in words on passports. 184 tests.
+
+## v0.10.0 (30 Nov 2026): enterprise pilot-ready
+bridge (remote Streamable HTTP server as local stdio, so the proxy governs it unchanged; headers never logged),
+protected keys in loadOrCreateKey (env:VAR, keychain:NAME via macOS security, Linux secret-tool, Windows DPAPI),
+approvals by link (recordPending/listPending; proxy --approval-webhook and --approval-url; approvals list|serve with a
+one-time token on localhost), receipts view (combined verified HTML), --bindings override, agents scan and assess
+--agents-inventory, security pack (SECURITY.md, THREAT-MODEL, DATA-FLOW, VENDOR-QUESTIONNAIRE), pilot kit
+(scripts/pilot, templates, PILOT.md rewritten: free design-partner pilots first). 189 tests.

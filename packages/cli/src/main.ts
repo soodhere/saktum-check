@@ -2,9 +2,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { passportSlug, renderAgentPassport, renderAssessment, renderLedgerPassport, renderPassportGallery, renderServerPassport, badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
+import { renderReceiptsView, passportSlug, renderAgentPassport, renderAssessment, renderLedgerPassport, renderPassportGallery, renderServerPassport, badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { actionClass, bindingsFor, describeMandate, attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, crosswalk, coverageSummary, DISCLAIMER, agentMaturity, acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, type Agreement, type Credential, type Manifest, approveAction, checkOperator, cosignMandate, revocationOf, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { actionClass, bindingsFor, describeMandate, attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, listPending, scanAgents, crosswalk, coverageSummary, DISCLAIMER, agentMaturity, acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, type Agreement, type Credential, type Manifest, approveAction, checkOperator, cosignMandate, revocationOf, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
@@ -553,7 +553,10 @@ export async function main(argv = process.argv): Promise<number> {
     .option("--revoked-credentials <file>", "JSON list of revoked credential ids")
     .option("--agreement <file>", "the signed agreement with the provider: calls outside it are refused and every call is metered")
     .option("--wallet <file>", "prepaid token wallet charged per call under the agreement")
-    .action(async (parts: string[], o: { mandate?: string; agentKey: string; enforce: boolean; receipts?: string; revocations?: string; approvals?: string; credential?: string; revokedCredentials?: string; agreement?: string; wallet?: string }) => {
+    .option("--approval-webhook <url>", "post approval requests to this webhook (Slack, Teams or an email relay)")
+    .option("--approval-url <url>", "base link of saktum approvals serve, included in approval requests")
+    .option("--bindings <file>", "bindings override: JSON { tool: { action, bindings: { arg: field } } } for tools that declare nothing")
+    .action(async (parts: string[], o: { mandate?: string; agentKey: string; enforce: boolean; receipts?: string; revocations?: string; approvals?: string; credential?: string; revokedCredentials?: string; agreement?: string; wallet?: string; approvalWebhook?: string; approvalUrl?: string; bindings?: string }) => {
       const { homedir } = await import("node:os");
       const { join } = await import("node:path");
       let mandate: Mandate | undefined;
@@ -563,7 +566,8 @@ export async function main(argv = process.argv): Promise<number> {
       const { runProxy } = await import("./proxy.js");
       exitCode = await runProxy({ command: parts[0]!, args: parts.slice(1), receiptsPath: o.receipts ?? join(homedir(), ".saktum", "receipts.jsonl"), agentKey, mandate, enforce: o.enforce, ...(o.revocations ? { revocationsPath: o.revocations } : {}), ...(o.approvals ? { approvalsPath: o.approvals } : {}),
         ...(o.credential ? { credential: JSON.parse(readFileSync(o.credential, "utf8")) as Credential } : {}), ...(o.revokedCredentials ? { revokedCredentials: JSON.parse(readFileSync(o.revokedCredentials, "utf8")) as string[] } : {}),
-        ...(o.agreement ? { agreement: JSON.parse(readFileSync(o.agreement, "utf8")) as Agreement } : {}), ...(o.wallet ? { walletPath: o.wallet } : {}), log: (m) => process.stderr.write(`saktum: ${m}\n`) });
+        ...(o.agreement ? { agreement: JSON.parse(readFileSync(o.agreement, "utf8")) as Agreement } : {}), ...(o.wallet ? { walletPath: o.wallet } : {}),
+        ...(o.approvalWebhook ? { approvalWebhook: o.approvalWebhook } : {}), ...(o.approvalUrl ? { approvalUrl: o.approvalUrl } : {}), ...(o.bindings ? { bindingsOverride: JSON.parse(readFileSync(o.bindings, "utf8")) } : {}), log: (m) => process.stderr.write(`saktum: ${m}\n`) });
     });
 
   const receipts = program.command("receipts").description("Signed receipts of agent tool calls (from saktum proxy)");
@@ -594,6 +598,15 @@ export async function main(argv = process.argv): Promise<number> {
         process.stdout.write(`Sent to ${sanitizeText(url)}: HTTP ${res.status}\n`);
         if (!res.ok) exitCode = 1;
       }
+    });
+  receipts.command("view")
+    .description("One verified view across many agents' receipt logs (for example collected in a shared folder)")
+    .argument("<files...>", "receipt logs").option("--html <file>", "output", "saktum-receipts.html")
+    .action((fs3: string[], o: { html: string }) => {
+      const logs = fs3.map((f) => { const e = parseReceiptLog(readFileSync(f, "utf8")); return { name: f, verified: verifyReceiptLog(e).ok, entries: e.map((x) => ({ at: x.receipt.issuedAt, agent: x.receipt.envelope.caller.agent?.slice(0, 24) ?? "", tool: x.receipt.envelope.tool, outcome: x.receipt.outcome, code: x.result.code ?? "", reason: String(x.receipt.reason ?? ""), tokens: x.result.metering?.tokens ?? 0 })) }; });
+      writeFileSync(o.html, renderReceiptsView(logs));
+      process.stdout.write(`Combined ${logs.reduce((n, l) => n + l.entries.length, 0)} receipts from ${logs.length} log(s) into ${sanitizeText(o.html)}; ${logs.filter((l) => !l.verified).length} log(s) failed verification.\n`);
+      exitCode = logs.every((l) => l.verified) ? 0 : 1;
     });
   receipts.command("summary")
     .description("The path, not the answer: which tools were called, how often, in what order, retries, denials, destructive actions")
@@ -700,12 +713,13 @@ export async function main(argv = process.argv): Promise<number> {
     .option("--turns-per-day <n>", "turns a day per agent", "1000")
     .option("--price-per-mtok <usd>", "price per million input tokens", "3")
     .option("--vendor-reviews <n>", "AI vendor or tool security reviews a year", "20")
-    .action((o: { fleet: string; org: string; receipts: string[]; out: string; agents: string; turnsPerDay: string; pricePerMtok: string; vendorReviews: string }) => {
+    .option("--agents-inventory <file>", "agent inventory from saktum agents scan --out")
+    .action((o: { fleet: string; org: string; receipts: string[]; out: string; agents: string; turnsPerDay: string; pricePerMtok: string; vendorReviews: string; agentsInventory?: string }) => {
       const fleet = JSON.parse(readFileSync(o.fleet, "utf8"));
       const rec = o.receipts.map((f) => { const e = parseReceiptLog(readFileSync(f, "utf8")); return { agent: e[0]?.receipt.envelope.caller.agent?.slice(0, 32) ?? f, summary: summariseReceipts(e), verified: verifyReceiptLog(e).ok }; });
       const distinctTokens = (fleet.servers ?? []).reduce((a: number, x: { tokens?: number }) => a + (x.tokens ?? 0), 0);
       const roi = roiEstimate({ ...ROI_DEFAULTS, tokensPerTurn: distinctTokens, agents: Number(o.agents), turnsPerDay: Number(o.turnsPerDay), pricePerMTok: Number(o.pricePerMtok), vendorReviews: Number(o.vendorReviews) });
-      writeFileSync(o.out, renderAssessment(o.org, fleet, rec, roi, crosswalk().map((x) => ({ name: x.name, summary: coverageSummary(x) })), DISCLAIMER));
+      writeFileSync(o.out, renderAssessment(o.org, fleet, rec, roi, crosswalk().map((x) => ({ name: x.name, summary: coverageSummary(x) })), DISCLAIMER, o.agentsInventory ? JSON.parse(readFileSync(o.agentsInventory, "utf8")) : undefined));
       process.stdout.write(`Wrote the MCP Trust Assessment for ${sanitizeText(o.org, 80)} to ${sanitizeText(o.out)}: ${fleet.servers?.length ?? 0} servers, ${fleet.nonCompliant ?? 0} violating policy. Open it in a browser and print to PDF.\n`);
     });
 
@@ -874,6 +888,62 @@ export async function main(argv = process.argv): Promise<number> {
         }
       }
       process.stdout.write(`\n${DISCLAIMER}\n`);
+    });
+
+  program.command("bridge")
+    .description("Present a remote MCP server (Streamable HTTP) as a local one, so saktum proxy can govern it: saktum proxy ... -- saktum bridge https://host/mcp")
+    .argument("<url>", "the remote server's URL")
+    .option("--header <Name: value>", "HTTP header to send, for example Authorization (repeatable; never logged)", collect, [] as string[])
+    .action(async (url: string, o: { header: string[] }) => {
+      if (!/^https?:\/\//.test(url)) throw new Error("Give the remote server's http(s) URL.");
+      const { runBridge } = await import("./bridge.js");
+      exitCode = await runBridge(url, parseHeaders(o.header));
+    });
+
+  const approvals = program.command("approvals").description("Approvals by link (v0.10)");
+  approvals.command("list").option("--approvals <file>", "approvals file").action((o: { approvals?: string }) => {
+    const p = listPending(o.approvals);
+    for (const x of p) process.stdout.write(`${x.id}  ${sanitizeText(x.agent, 40)}  ${sanitizeText(x.tool, 40)}  ${sanitizeText(x.reason, 160)}  (${x.at.slice(0, 16).replace("T", " ")})\n`);
+    process.stdout.write(`${p.length} waiting.\n`);
+  });
+  approvals.command("serve").description("A local page where the mandate's owner approves exactly one pending action with their key")
+    .requiredOption("--mandate <file>").option("--key <path>", "the owner's key (file, env:VAR or keychain:NAME)")
+    .option("--approvals <file>", "approvals file shared with the proxy").option("--port <n>", "port", "8787").option("--host <host>", "interface to listen on", "127.0.0.1").option("--minutes <n>", "approval validity", "60")
+    .action(async (o: { mandate: string; key?: string; approvals?: string; port: string; host: string; minutes: string }) => {
+      const http = await import("node:http"); const { randomBytes } = await import("node:crypto");
+      const m = JSON.parse(readFileSync(o.mandate, "utf8")) as Mandate; const key = loadOrCreateKey(o.key); const token = randomBytes(16).toString("hex");
+      if (key.kid !== m.owner.id) throw new Error("This key is not the mandate owner's key.");
+      const esc2 = (x: unknown) => String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+      const pageOf = (body: string) => `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Saktum approvals</title><body style="font:15px system-ui;max-width:760px;margin:24px auto;padding:0 16px"><h1>Approvals for ${esc2(m.agent.name)}</h1>${body}</body>`;
+      const server = http.createServer((req, res) => {
+        const u = new URL(req.url ?? "/", `http://${req.headers.host}`);
+        if (u.searchParams.get("token") !== token) { res.writeHead(403); res.end("Forbidden"); return; }
+        if (req.method === "POST") {
+          let b = ""; req.on("data", (c) => { b += c; if (b.length > 2000) req.destroy(); });
+          req.on("end", () => { const id = new URLSearchParams(b).get("id") ?? "";
+            if (!listPending(o.approvals).some((p) => p.id === id)) { res.writeHead(400, { "Content-Type": "text/html" }); res.end(pageOf(`<p>No pending request ${esc2(id)}.</p>`)); return; }
+            approveAction(m, id, key, Number(o.minutes), o.approvals);
+            res.writeHead(200, { "Content-Type": "text/html" }); res.end(pageOf(`<p>\u2713 Approved <code>${esc2(id)}</code>, once, for ${esc2(o.minutes)} minutes. The agent can retry exactly that action.</p><p><a href="/?token=${token}">Back</a></p>`)); });
+          return;
+        }
+        const only = u.searchParams.get("id");
+        const p = listPending(o.approvals).filter((x) => !only || x.id === only);
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(pageOf(p.length ? p.map((x) => `<form method="post" action="/?token=${token}" style="border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0"><b>${esc2(x.tool)}</b> <code>${esc2(x.id)}</code><p>${esc2(x.reason)}</p><small>${esc2(x.at)}</small><input type="hidden" name="id" value="${esc2(x.id)}"><p><button type="submit">Approve exactly this action, once</button></p></form>`).join("") : "<p>Nothing is waiting for approval.</p>"));
+      });
+      server.listen(Number(o.port), o.host, () => process.stdout.write(`Approvals page: http://${o.host}:${o.port}/?token=${token}\nGive the proxy --approval-url "http://${o.host}:${o.port}/?token=${token}" so requests carry a one-click link. Ctrl+C to stop.\n`));
+      await new Promise(() => undefined);
+    });
+
+  program.command("agents").description("Agent inventory (v0.10)").command("scan")
+    .argument("[dirs...]", "folders to search for agent mandates (default: this folder and ~/.saktum)")
+    .option("--out <file>", "write the inventory as JSON (for saktum assess --agents)")
+    .action(async (dirs: string[], o: { out?: string }) => {
+      const { homedir } = await import("node:os"); const { join } = await import("node:path");
+      const a = scanAgents(dirs.length ? dirs : [".", join(homedir(), ".saktum")]);
+      for (const x of a) process.stdout.write(`${x.revoked ? "\u26d4" : x.valid ? "\u2713" : "\u2717"} ${sanitizeText(x.name, 40).padEnd(26)} owner ${sanitizeText(x.owner, 30).padEnd(16)} ${x.operator ? "operator " + sanitizeText(x.operator, 30) : "no operator"} \u00b7 ${x.autonomy} \u00b7 ${x.riskTier} \u00b7 ${x.maturity}\n`);
+      process.stdout.write(`${a.length} agent(s); ${a.filter((x) => !x.operator).length} without an operator countersignature; ${a.filter((x) => x.revoked).length} revoked.\n`);
+      if (o.out) writeFileSync(o.out, JSON.stringify(a, null, 2) + "\n");
     });
 
   program.command("demo")

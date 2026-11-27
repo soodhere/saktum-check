@@ -1,6 +1,6 @@
 {
   "name": "saktum",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "license": "Apache-2.0",
   "description": "Saktum Check: test MCP servers for conformance, sign-in, security and agent experience.",

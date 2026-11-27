@@ -1,44 +1,29 @@
-# The MCP Trust Pilot: playbook and templates
+# The MCP Trust Assessment: design-partner pilot runbook
 
-A 4 to 6 week paid pilot with a security, AI-governance or platform team. Everything runs in the customer's
-environment; nothing is sent to Saktum.
+**What it is:** a 4-week pilot that runs entirely in your environment. Nothing is sent to Saktum.
+**First pilots are free design partnerships** (feedback, an approved quote, a reference); paid pilots ($15-30k,
+credited against the first year) start after incorporation, from Q2 2027.
+**Effort:** about 2 hours a week of your team's time; 2-3 hours a week from Saktum (one 30-minute call, async help).
 
-## Success criteria (agree these in week 0, in writing)
-1. A complete inventory of MCP servers used by the pilot teams, with grades and capabilities.
-2. A first organisation policy, agreed with security and enforced in CI on at least one MCP repository.
-3. An allowlist deployed to (or ready for) the customer's MCP firewall or gateway.
-4. Agent mandates and receipts on one or two agent workflows, with the path of every call on record.
-5. An executive assessment the sponsor can present internally.
+## What you get (all available today)
+1. An inventory of every MCP server your people use, with grades, risk tiers and costs.
+2. Your policy, enforced as code; an allowlist for your MCP firewall or gateway; daily monitoring for silent changes.
+3. One agent workflow governed (coding agents are ideal): mandates, approvals by link, signed receipts.
+4. A board-ready assessment with a business case and evidence mapped to the EU AI Act, NIST AI RMF and ISO 42001.
 
 ## Week by week
-| Week | Work | Saktum commands | Customer provides |
+| Week | You run | Saktum helps with | Output |
 | --- | --- | --- | --- |
-| 0 | Kick-off: scope, teams, success criteria, data handling | — | Sponsor, a security contact, pilot teams |
-| 1 | Inventory: run on pilot machines, merge | `scan-config --yes --out setup.json`; `fleet` | A way to run one command on machines (device management or the engineers) |
-| 2 | Policy: draft with security; first exceptions with owners and expiry | `--policy saktum-policy.yaml`; `fleet --policy` | Security's rules and risk appetite |
-| 3 | Enforce: CI gate on MCP repositories; allowlist | GitHub Action with `policy`, `sarif`; `allowlist` | Repository access for the team |
-| 4 | Agents: mandates and receipts on one or two workflows | `agent create`; `proxy --enforce`; `receipts summary` | An agent workflow and its owner |
-| 5 | Report: executive assessment and recommendations | `assess --fleet inventory.json --receipts …` | Sponsor review |
-| 6 | Decision: production rollout and gateway design partnership | — | Go or no-go |
+| 1 | `scripts/pilot/scan-config-*.{ps1,sh}` on pilot machines; `saktum fleet` | Kick-off; success criteria | Inventory |
+| 2 | `saktum fleet --policy saktum-policy.yaml`; `saktum allowlist`; `examples/saktum-watch.yml` | Writing the policy; exceptions | Policy and monitoring |
+| 3 | `saktum agent create --intent ...`; `saktum proxy ... -- saktum bridge https://...` for remote tools; `saktum approvals serve` | Mandates, bindings overrides, approvals | One governed workflow |
+| 4 | `saktum agents scan --out agents.json`; `saktum receipts view`; `saktum assess --fleet inventory.json --agents-inventory agents.json` | Read-out to your sponsor | Assessment |
 
-## Pilot proposal (one page, fill the brackets)
-> **MCP Trust Pilot for [Organisation]**
-> **Goal:** know which MCP servers your people and agents use, enforce your own rules, and keep evidence of every agent action.
-> **Scope:** [N] teams, [N] machines, [N] MCP repositories, [1–2] agent workflows. **Duration:** [4–6] weeks.
-> **Deliverables:** inventory; organisation policy enforced in CI; allowlist for your MCP firewall or gateway; agent mandates and receipts; executive assessment with recommendations.
-> **Data:** everything runs in your environment; nothing is sent to Saktum.
-> **Fee:** [fixed fee], credited in full against the first year of the Saktum gateway if you continue.
-> **Next:** design partnership for the Saktum gateway (decisions and signed receipts on every agent call).
+## Before you start
+A design-partner agreement and mutual NDA (templates in `templates/`); a shared folder for inventory files; Node.js 20+
+on pilot machines; one agent workflow to govern; your security review can use `SECURITY.md` and `docs/`.
 
-## Letter of intent (short, non-binding)
-> [Organisation] intends to run an MCP Trust Pilot with Saktum starting [date], for [scope], with the success criteria
-> above, at [fee] (credited against a first gateway year). This letter is non-binding and does not create an obligation
-> to purchase. Signed: [name, role, date].
-
-## Questions to ask in discovery (about past behaviour, not about Saktum)
-1. The last time an AI agent or tool did something unexpected: what happened next?
-2. How do you decide today which MCP servers or AI tools are allowed, and who decides?
-3. What evidence did audit or compliance ask for about AI, and how did you produce it?
-4. What have you tried or bought for this, and what was missing?
-5. Whose budget would pay for solving it?
-6. (Providers) Would you pay for independent people to try to break your server? (bounty interest)
+## Honest scope
+Saktum governs MCP tool calls of agents you run (local tools, and remote tools through the bridge). It does not yet
+govern agents inside SaaS platforms (planned with the hosted gateway), offer SSO or a hosted console, or detect prompt
+injection inside models (it contains a manipulated agent through its mandate).
