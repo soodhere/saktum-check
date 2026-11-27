@@ -12,7 +12,7 @@
     "@saktum/sign": "workspace:*",
     "@saktum/testkit-core": "workspace:*",
     "@saktum/transports": "workspace:*",
-    "commander": "^12.1.0",
+    "commander": "^15.1.0",
     "@modelcontextprotocol/sdk": "^1.32.2"
   }
 }
