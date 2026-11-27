@@ -37,7 +37,7 @@ jobs:
           node saktum.mjs --version
           node saktum.mjs doctor
       - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+        uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
       - name: Sign the bundle (Sigstore, keyless via GitHub OIDC)
         run: cosign sign-blob --yes --bundle dist-bundle/saktum.mjs.sigstore.json dist-bundle/saktum.mjs
       - name: Create the release
