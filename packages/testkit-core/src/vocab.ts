@@ -39,16 +39,20 @@ VOCABULARIES.enterprise = { version: "0.1", fields: [
   { path: "enterprise.data_class", type: "string", description: "Classification of the data: public, internal, confidential or restricted" },
   { path: "enterprise.vendor", type: "string", description: "The supplier or vendor" }
 ] };
+VOCABULARIES.code = { version: "0.1", fields: [
+  { path: "code.repository", type: "string", description: "The code repository" },
+  { path: "code.environment", type: "string", description: "The deployment environment (for example staging, production)" }
+] };
 export const KNOWN_FIELDS = new Set(Object.values(VOCABULARIES).flatMap((v) => v.fields.map((f) => f.path)));
 
-export type ActionClass = "search" | "cart" | "substitute" | "pay" | "book" | "change" | "cancel" | "communicate" | "other";
+export type ActionClass = "search" | "cart" | "substitute" | "pay" | "book" | "change" | "cancel" | "communicate" | "deploy" | "other";
 type ToolLike = { name: string; description?: string; inputSchema?: unknown; _meta?: Record<string, unknown> };
 
 const NAME_RULES: [RegExp, ActionClass][] = [
   [/(^|[_-])(search|find|list|get|lookup|deals|browse)([_-]|$)/i, "search"], [/(^|[_-])(substitute|replace|swap)([_-]|$)/i, "substitute"],
   [/(^|[_-])(add_to_cart|cart|basket)([_-]|$)|add_to_cart/i, "cart"], [/(^|[_-])(pay|payment|checkout|purchase|charge)([_-]|$)/i, "pay"],
   [/(^|[_-])(book|reserve|hold)([_-]|$)/i, "book"], [/(^|[_-])(change|modify|update|seat|upgrade)([_-]|$)/i, "change"],
-  [/(^|[_-])(cancel|refund|void)([_-]|$)/i, "cancel"], [/(^|[_-])(send|email|message|notify|post)([_-]|$)/i, "communicate"]
+  [/(^|[_-])(cancel|refund|void)([_-]|$)/i, "cancel"], [/(^|[_-])(deploy|release|publish)([_-]|$)/i, "deploy"], [/(^|[_-])(send|email|message|notify|post)([_-]|$)/i, "communicate"]
 ];
 export function actionClass(t: ToolLike): { cls: ActionClass; basis: "declared" | "inferred" } {
   const declared = t._meta?.["io.saktum/action"];

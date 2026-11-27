@@ -11,6 +11,17 @@ npx saktum check https://your-server.example/mcp     # a remote server (sign-in 
 
 Runs on your machine. Nothing is uploaded. Your own environment variables are never passed to the server.
 
+## Evidence for governance (v0.9)
+
+Saktum is the agent-controls layer of AI governance: identity, least privilege, tool permissions, human oversight and
+audit. `npx saktum evidence --framework all` maps its evidence to the **EU AI Act, NIST AI RMF, ISO/IEC 42001, the OWASP
+Top 10 for LLM applications, DORA and NIS2, and GDPR and India's DPDP Act**, marking each obligation covered, partly
+covered or not covered, with the commands that produce the evidence ([docs/EVIDENCE.md](docs/EVIDENCE.md)); the
+executive assessment includes the summary. Saktum supports evidence; it never claims compliance. Also new: the
+**coding-agent** demo story (`npx saktum demo --story coding`: its own repository only, production releases only after
+your signed approval of exactly that release), the `deploy` action class and `code` vocabulary, and assurance shown in
+words (self-tested, independently checked, certified).
+
 ## From trust to a marketplace (v0.8)
 
 Every agent traceable to a person and an organisation (**identity chains**, with orphan detection); publishers sign
@@ -209,7 +220,7 @@ servers not on your allowlist, and the weakest grades. Configured secrets are ne
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: soodhere/saktum-check@v0.8.1
+- uses: soodhere/saktum-check@v0.9.0
   with:
     target: "-- node build/index.js"     # or an https URL
     args: "--active --tests saktum.tests.yaml"   # optional; --active only for your own server

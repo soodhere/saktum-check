@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { passportSlug, renderAgentPassport, renderAssessment, renderLedgerPassport, renderPassportGallery, renderServerPassport, badgeSvg, checksTable, renderHtml, renderPacket, renderTerminal, SELF_SIGNED_NOTE, toSarif } from "@saktum/report";
 import { loadOrCreateKey, signDocument, verifyDocument } from "@saktum/sign";
-import { actionClass, bindingsFor, describeMandate, attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, agentMaturity, acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, type Agreement, type Credential, type Manifest, approveAction, checkOperator, cosignMandate, revocationOf, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
+import { actionClass, bindingsFor, describeMandate, attestationToCredential, receiptsToOtlp, roiEstimate, ROI_DEFAULTS, signCredentialJwt, verifyCredentialJwt, watchAllowlist, type WatchEntry, crosswalk, coverageSummary, DISCLAIMER, agentMaturity, acceptAgreement, buildManifest, draftAgreement, findOrphans, issueCredential, kpis, organisationRoot, searchCatalogue, topUp, usageStatement, verifyAgreement, verifyChain, walletBalance, type Agreement, type Credential, type Manifest, approveAction, checkOperator, cosignMandate, revocationOf, revokeMandate, trustStatement, agentRiskTier, checkMandate, createMandate, parseReceiptLog, summariseReceipts, verifyReceiptLog, type Mandate, allowlistFromLedger, appendToLedger, DEFAULT_LEDGER_URL, extractJson, findInLedger, parseLedger, verifyLedger, buildFleet, evaluatePolicy, fleetHtml, parsePolicy, redactCommand, redactUrl, renderFleet, renderVerdict, subjectFromResult, type Policy, appendTestCase, lintPaths, lintSarif, analyseSetup, configLocations, parseClientConfig, renderSetup, type ServerScan, buildAllowlist, buildAttestation, compileContract, diffLocks, docsFor, ENGINE_VERSION, loadEmbeddedPacks, loadPackDir, parseTestCases, renderFix, runTrustCheck, sanitizeText, toolsLock, type Result, type Severity, type ToolsLock } from "@saktum/testkit-core";
 import { connect } from "@saktum/transports";
 import { runDoctor } from "./doctor.js";
 import { parseTarget } from "@saktum/transports";
@@ -705,7 +705,7 @@ export async function main(argv = process.argv): Promise<number> {
       const rec = o.receipts.map((f) => { const e = parseReceiptLog(readFileSync(f, "utf8")); return { agent: e[0]?.receipt.envelope.caller.agent?.slice(0, 32) ?? f, summary: summariseReceipts(e), verified: verifyReceiptLog(e).ok }; });
       const distinctTokens = (fleet.servers ?? []).reduce((a: number, x: { tokens?: number }) => a + (x.tokens ?? 0), 0);
       const roi = roiEstimate({ ...ROI_DEFAULTS, tokensPerTurn: distinctTokens, agents: Number(o.agents), turnsPerDay: Number(o.turnsPerDay), pricePerMTok: Number(o.pricePerMtok), vendorReviews: Number(o.vendorReviews) });
-      writeFileSync(o.out, renderAssessment(o.org, fleet, rec, roi));
+      writeFileSync(o.out, renderAssessment(o.org, fleet, rec, roi, crosswalk().map((x) => ({ name: x.name, summary: coverageSummary(x) })), DISCLAIMER));
       process.stdout.write(`Wrote the MCP Trust Assessment for ${sanitizeText(o.org, 80)} to ${sanitizeText(o.out)}: ${fleet.servers?.length ?? 0} servers, ${fleet.nonCompliant ?? 0} violating policy. Open it in a browser and print to PDF.\n`);
     });
 
@@ -854,17 +854,39 @@ export async function main(argv = process.argv): Promise<number> {
   program.command("bounty").description("Bounties (contract only for now)").command("validate").argument("<file>")
     .action((f: string) => { const ok = compileContract("bounty.schema.json")(JSON.parse(readFileSync(f, "utf8"))); process.stdout.write(ok ? "\u2713 Valid bounty document.\n" : "\u2717 Not a valid bounty document.\n"); exitCode = ok ? 0 : 1; });
 
+  program.command("evidence")
+    .description("Saktum's evidence mapped to the frameworks you're held to (supports evidence; never a compliance claim)")
+    .option("--framework <id>", "all, eu-ai-act, nist-ai-rmf, iso-42001, owasp-llm, dora-nis2, gdpr-dpdp", "all")
+    .option("--markdown", "print as Markdown tables", false)
+    .action((o: { framework: string; markdown: boolean }) => {
+      const fs2 = crosswalk(o.framework);
+      if (!fs2.length) throw new Error("Unknown framework. Use all, eu-ai-act, nist-ai-rmf, iso-42001, owasp-llm, dora-nis2 or gdpr-dpdp.");
+      const mark = { covered: "\u2713 covered", partial: "\u25D0 partly", gap: "\u2013 not covered" };
+      for (const f of fs2) {
+        const sm = coverageSummary(f);
+        if (o.markdown) {
+          process.stdout.write(`## ${f.name}\n\n${f.note}\n\n| Ref | Obligation | Coverage | Saktum evidence | Commands |\n| --- | --- | --- | --- | --- |\n`);
+          for (const i of f.items) process.stdout.write(`| ${i.ref} | ${i.obligation} | ${mark[i.coverage]} | ${i.evidence} | ${i.commands.map((c) => "`" + c + "`").join(", ")} |\n`);
+          process.stdout.write("\n");
+        } else {
+          process.stdout.write(`\n${f.name}: ${sm.covered} covered, ${sm.partial} partly, ${sm.gap} not covered\n  ${f.note}\n`);
+          for (const i of f.items) process.stdout.write(`  ${mark[i.coverage].padEnd(15)} ${i.ref.padEnd(18)} ${i.obligation}\n${" ".repeat(36)}${i.evidence}${i.commands.length ? ` (${i.commands.join("; ")})` : ""}\n`);
+        }
+      }
+      process.stdout.write(`\n${DISCLAIMER}\n`);
+    });
+
   program.command("demo")
     .description("See permissions, autonomy, risk and receipts in 60 seconds: one shopping agent under three mandates")
     .option("--out <dir>", "folder for the demo's mandates, receipts and passports", "saktum-demo")
-    .option("--story <name>", "grocery, travel, finance, marketplace, autonomy, or all (grocery, travel, finance and marketplace)", "all")
+    .option("--story <name>", "grocery, travel, finance, coding, marketplace, autonomy, or all (grocery, travel, finance, coding and marketplace)", "all")
     .action(async (o: { out: string; story: string }) => {
       const { runDemo } = await import("./demo.js");
       await runDemo(o.out, (l) => process.stdout.write(l + "\n"), o.story);
     });
   program.command("demo-server", { hidden: true })
     .description("The demo MCP servers (used by saktum demo)")
-    .option("--story <name>", "grocery, travel, finance or autonomy", "autonomy")
+    .option("--story <name>", "grocery, travel, finance, coding or autonomy", "autonomy")
     .action(async (o: { story: string }) => { const { startDemoServer } = await import("./demo.js"); await startDemoServer(o.story); });
 
   program.command("mcp")

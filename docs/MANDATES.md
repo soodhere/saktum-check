@@ -70,3 +70,10 @@ countersignature or an identity chain to an organisation), **A3 Bounded** (expli
 sub-delegation, and caps or approvals when it can act irreversibly or spend), **A4 Explained** (signed, verified
 receipts with a reason for every decision), **A5 Proven** (at least 10 actions, none outside its mandate, not revoked).
 Every Agent Passport shows the level and which evidence is met.
+
+## Coding agents (v0.9)
+The `code` vocabulary (`code.repository`, `code.environment`) and the `deploy` action class let a mandate keep a coding
+agent to its own repository and make production releases wait for approval: `actions` with `{ "cls": "deploy",
+"autonomy": "propose" }`, plus a rule `{ "field": "code.repository", "op": "in", "value": ["payments-service"] }`.
+Saktum governs the agent's tool calls (pull requests, secrets, deployments), not raw shell commands inside its machine:
+use it with a sandbox. Try `npx saktum demo --story coding`.

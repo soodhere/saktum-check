@@ -241,6 +241,7 @@
               "change",
               "cancel",
               "communicate",
+              "deploy",
               "other"
             ]
           },

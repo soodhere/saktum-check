@@ -191,3 +191,9 @@ metering. Contracts: credential, manifest, agreement, bounty (11 total). CLI: or
 agreement, wallet, usage, kpi, bounty validate. Demo story marketplace. 179 tests.
 v0.8.1: agent maturity A1-A5 (agentMaturity, evidence-based, shown in Agent Passports); marketplace demo mandate gains
 an approval threshold so it is Bounded; demo agents earn A4 (A5 needs a 10-action track record). 180 tests.
+
+## v0.9.0 (29 Nov 2026): evidence for governance
+crosswalk.ts (EU AI Act, NIST AI RMF, ISO/IEC 42001, OWASP LLM Top 10 2025, DORA and NIS2, GDPR and DPDP; coverage
+covered/partial/gap; DISCLAIMER: supports evidence, never compliance), `saktum evidence`, assessment evidence card,
+docs/EVIDENCE.md generated from the crosswalk. Coding-agent story (code vocabulary, deploy action class; production
+waits for a signed approval; another repository's secret blocked). Assurance shown in words on passports. 184 tests.

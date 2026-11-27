@@ -40,9 +40,17 @@ const FINANCE_TOOLS = [
   { name: "pay_invoice", description: "Pays a vendor invoice from the company account.", inputSchema: { type: "object", properties: { amount: { type: "number" }, currency: { type: "string" }, vendor: { type: "string" }, idempotency_key: { type: "string" } }, required: ["amount", "currency", "vendor", "idempotency_key"] }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true }, _meta: B({ amount: "commerce.order.total", currency: "commerce.order.currency", vendor: "enterprise.vendor" }, "pay") }
 ];
 
+const CODING_TOOLS = [
+  { name: "run_tests", description: "Run the repository's test suite.", inputSchema: { type: "object", properties: { repository: { type: "string" } }, required: ["repository"] }, annotations: { readOnlyHint: true }, _meta: B({ repository: "code.repository" }, "search") },
+  { name: "open_pull_request", description: "Open a pull request with the agent's changes.", inputSchema: { type: "object", properties: { repository: { type: "string" }, title: { type: "string" } }, required: ["repository", "title"] }, annotations: { readOnlyHint: false, destructiveHint: false }, _meta: B({ repository: "code.repository" }, "change") },
+  { name: "read_secret", description: "Read a secret from the secrets store.", inputSchema: { type: "object", properties: { repository: { type: "string" }, name: { type: "string" } }, required: ["repository", "name"] }, annotations: { readOnlyHint: true }, _meta: B({ repository: "code.repository" }, "search") },
+  { name: "deploy_to_staging", description: "Deploy a build to the staging environment.", inputSchema: { type: "object", properties: { repository: { type: "string" }, build: { type: "string" } }, required: ["repository", "build"] }, annotations: { readOnlyHint: false, destructiveHint: false }, _meta: B({ repository: "code.repository" }, "change") },
+  { name: "deploy_to_production", description: "Release a build to production.", inputSchema: { type: "object", properties: { repository: { type: "string" }, build: { type: "string" } }, required: ["repository", "build"] }, annotations: { readOnlyHint: false, destructiveHint: true }, _meta: B({ repository: "code.repository" }, "deploy") }
+];
+
 /** The demo servers: ordinary MCP servers with no knowledge of Saktum (their tools declare semantic bindings). */
 export async function startDemoServer(story = "autonomy"): Promise<void> {
-  const tools = story === "grocery" ? GROCERY_TOOLS : story === "travel" ? TRAVEL_TOOLS : story === "finance" ? FINANCE_TOOLS : DEMO_TOOLS;
+  const tools = story === "grocery" ? GROCERY_TOOLS : story === "travel" ? TRAVEL_TOOLS : story === "finance" ? FINANCE_TOOLS : story === "coding" ? CODING_TOOLS : DEMO_TOOLS;
   const server = new Server({ name: story === "travel" ? "demo-travel" : story === "finance" ? "demo-finance" : "demo-grocer", version: "1.0.0" }, { capabilities: { tools: {} } });
   const cart: string[] = [];
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
@@ -62,6 +70,11 @@ export async function startDemoServer(story = "autonomy"): Promise<void> {
       case "share_traveller_details": return text(`Shared with ${a.recipient}.`);
       case "send_report": return text(`Sent "${a.report}" to ${a.recipient}.`);
       case "pay_invoice": return text(`Paid $${a.amount} to ${a.vendor}.`);
+      case "run_tests": return text(`${a.repository}: 412 tests passed.`);
+      case "open_pull_request": return text(`Opened pull request #318 in ${a.repository}: ${a.title}.`);
+      case "read_secret": return text(`Read ${a.name}.`);
+      case "deploy_to_staging": return text(`Deployed ${a.build} to staging.`);
+      case "deploy_to_production": return text(`Released ${a.build} to production.`);
       default: return { isError: true, content: [{ type: "text", text: "Unknown tool" }] };
     }
   });
@@ -128,6 +141,19 @@ const FINANCE: Story = { id: "finance", title: "Finance: \"month-end operations;
   { tool: "pay_invoice", args: { amount: 12000, currency: "CAD", vendor: "Consulting LLP", idempotency_key: "f-2" }, say: "tries to pay a $12,000 consulting invoice" },
   { tool: "", args: {}, say: "you approve exactly that invoice (saktum agent approve)", approveLast: true },
   { tool: "pay_invoice", args: { amount: 12000, currency: "CAD", vendor: "Consulting LLP", idempotency_key: "f-2" }, say: "retries the same $12,000 invoice" }] };
+
+const CODING: Story = { id: "coding", title: "Coding agent: \"fix the failing tests; production only with my approval\"", server: "coding", tools: CODING_TOOLS.map((t) => t.name), m: {
+  autonomy: "act", destructive: true, purpose: "Fix the failing tests in payments-service overnight", actions: [{ cls: "search", autonomy: "act" }, { cls: "change", autonomy: "act" }, { cls: "deploy", autonomy: "propose" }],
+  rules: [{ field: "code.repository", op: "in", value: ["payments-service"], label: "only the payments-service repository" }],
+  disclosures: { operator: "Acme platform team", incentives: "None", dataUse: "Code and secrets of payments-service only" } }, steps: [
+  { tool: "run_tests", args: { repository: "payments-service" }, say: "runs the test suite" },
+  { tool: "open_pull_request", args: { repository: "payments-service", title: "Fix currency rounding in refunds" }, say: "opens a pull request with the fix" },
+  { tool: "read_secret", args: { repository: "payments-service", name: "STAGING_DB_URL" }, say: "reads its own staging database secret" },
+  { tool: "read_secret", args: { repository: "billing-core", name: "PROD_SIGNING_KEY" }, say: "tries to read another repository's production key" },
+  { tool: "deploy_to_staging", args: { repository: "payments-service", build: "build-2291" }, say: "deploys build-2291 to staging" },
+  { tool: "deploy_to_production", args: { repository: "payments-service", build: "build-2291" }, say: "tries to release build-2291 to production" },
+  { tool: "", args: {}, say: "in the morning, you approve exactly that release (saktum agent approve)", approveLast: true },
+  { tool: "deploy_to_production", args: { repository: "payments-service", build: "build-2291" }, say: "retries the same release" }] };
 
 async function runStory(dir: string, st: Story, owner: ReturnType<typeof loadOrCreateKey>, log: (s: string) => void): Promise<string> {
   const self = [...process.execArgv, process.argv[1]!];
@@ -251,7 +277,7 @@ export async function runDemo(dir: string, log: (s: string) => void, story = "al
   const owner = loadOrCreateKey(join(dir, "owner-key.json"));
   log("Saktum demo: agents acting on real instructions (rules, preferences, substitutions, upsells), every decision explained and signed.\n");
   const files: string[] = [];
-  for (const st of story === "travel" ? [TRAVEL] : story === "grocery" ? [GROCERY] : story === "finance" ? [FINANCE] : [GROCERY, TRAVEL, FINANCE]) files.push(await runStory(dir, st, owner, log));
+  for (const st of story === "travel" ? [TRAVEL] : story === "grocery" ? [GROCERY] : story === "finance" ? [FINANCE] : story === "coding" ? [CODING] : [GROCERY, TRAVEL, FINANCE, CODING]) files.push(await runStory(dir, st, owner, log));
   if (story === "all") files.push(await runMarketplace(dir, log));
   log(["What you just saw: each agent followed its owner's instructions, not just limits. Even when tricked by a hidden",
     "instruction, the mandate held; personal and confidential data went only where you allowed; a big invoice waited for your",
